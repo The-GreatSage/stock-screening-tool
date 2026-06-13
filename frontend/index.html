@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stock Screening Tool</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="screen">
+        <div class="intro">
+          <div class="brand">
+            <div class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 64 64" role="img">
+                <path class="mark-frame" d="M32 5.5C46.6 5.5 58.5 17.4 58.5 32S46.6 58.5 32 58.5 5.5 46.6 5.5 32 17.4 5.5 32 5.5Z" />
+                <path class="mark-line" d="M16.5 41.5 26 32l7 6.5L47.5 22" />
+                <path class="mark-tick" d="M40.5 22h7v7" />
+                <path class="mark-bars" d="M18 46V35m14 11V30m14 16V18" />
+              </svg>
+            </div>
+            <p class="eyebrow">Research Dashboard</p>
+            <h1>Stock Screening Tool</h1>
+            <p class="subtitle">Evaluate a company against your investing checklist.</p>
+          </div>
+
+          <form id="ticker-form" class="ticker-form">
+            <label for="ticker">Ticker</label>
+            <div class="ticker-row">
+              <input id="ticker" name="ticker" autocomplete="off" placeholder="AAPL" />
+              <button type="submit">Evaluate</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="status" class="status" aria-live="polite"></div>
+        <section id="results" class="results" hidden></section>
+      </section>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
