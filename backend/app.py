@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from dataclasses import asdict, is_dataclass
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -60,7 +61,9 @@ def to_jsonable(value):
     return value
 
 
-def run(host="127.0.0.1", port=8000):
+def run(host=None, port=None):
+    host = host or os.environ.get("HOST", "127.0.0.1")
+    port = port or int(os.environ.get("PORT", "8000"))
     server = ThreadingHTTPServer((host, port), StockScreeningHandler)
     print(f"Stock Screening Tool running at http://{host}:{port}")
     server.serve_forever()

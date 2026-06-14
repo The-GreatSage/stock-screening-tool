@@ -26,6 +26,22 @@ Then open:
 http://127.0.0.1:8000
 ```
 
+## Deploy To Render
+
+The repository includes a `render.yaml` Blueprint for a free Render web
+service.
+
+1. In Render, create a new Blueprint.
+2. Connect the private GitHub repository:
+   `The-GreatSage/stock-screening-tool`
+3. Render will use:
+   - Build command: `pip install -r requirements.txt`
+   - Start command: `python backend/app.py`
+   - Health check: `/health`
+4. Confirm the Blueprint to begin the first deployment.
+
+Render supplies the public `$PORT`; the app binds to `0.0.0.0` when deployed.
+
 ## Optional Data Dependency
 
 For richer company fundamentals, install:
