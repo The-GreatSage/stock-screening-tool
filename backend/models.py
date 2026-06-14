@@ -26,6 +26,7 @@ class RuleResult:
 @dataclass
 class CompanyMetrics:
     ticker: str
+    sec_cik: str | None = None
     company_name: str | None = None
     sector: str | None = None
     industry: str | None = None

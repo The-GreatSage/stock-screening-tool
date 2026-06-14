@@ -13,7 +13,7 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data_sources.provider import fetch_company_metrics
-from data_sources.provider import _fmp_api_key
+from data_sources.provider import _fmp_api_key, _sec_user_agent
 from evaluator import evaluate_company
 
 
@@ -31,6 +31,7 @@ class StockScreeningHandler(SimpleHTTPRequestHandler):
                 {
                     "ok": True,
                     "fmp_configured": bool(_fmp_api_key()),
+                    "sec_configured": bool(_sec_user_agent()),
                 }
             )
             return

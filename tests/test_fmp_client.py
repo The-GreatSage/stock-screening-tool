@@ -54,6 +54,15 @@ class FMPClientTest(unittest.TestCase):
 
         self.assertIn("FMP_API_KEY is configured", metrics.source_notes[-1])
 
+    @patch("data_sources.fmp_client._get")
+    def test_normalizes_profile_cik(self, _get):
+        _get.side_effect = lambda path, _params, _key: (
+            FMPResponse([{"cik": "320193"}], True) if path == "profile" else FMPResponse()
+        )
+        metrics = enrich_with_fmp(CompanyMetrics(ticker="AAPL"), "secret")
+
+        self.assertEqual(metrics.sec_cik, "0000320193")
+
 
 if __name__ == "__main__":
     unittest.main()

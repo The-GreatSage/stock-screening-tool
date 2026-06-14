@@ -7,13 +7,17 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from data_sources.provider import _fmp_api_key, fetch_company_metrics
+from data_sources.provider import _fmp_api_key, _sec_user_agent, fetch_company_metrics
 
 
 class ProviderTest(unittest.TestCase):
     @patch.dict(os.environ, {"FMP_API_KEY": "", "FMP_API": "legacy-key"})
     def test_accepts_fmp_api_alias(self):
         self.assertEqual(_fmp_api_key(), "legacy-key")
+
+    @patch.dict(os.environ, {"SEC_USER_AGENT": "Stock Screening Tool test@example.com"})
+    def test_reads_sec_user_agent(self):
+        self.assertEqual(_sec_user_agent(), "Stock Screening Tool test@example.com")
 
     @patch("data_sources.provider.fetch_with_yahoo_public", side_effect=RuntimeError("fallback blocked"))
     @patch("data_sources.provider.fetch_with_yfinance", side_effect=RuntimeError("primary blocked"))

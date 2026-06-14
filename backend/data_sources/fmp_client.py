@@ -43,6 +43,7 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
     insider_trades = _records(responses["insider_trades"])
     institutional = _records(responses["institutional"])
 
+    metrics.sec_cik = metrics.sec_cik or _normalized_cik(_text(profile, "cik"))
     metrics.company_name = metrics.company_name or _text(profile, "companyName", "name")
     metrics.sector = metrics.sector or _text(profile, "sector")
     metrics.industry = metrics.industry or _text(profile, "industry")
@@ -235,3 +236,10 @@ def _date(item: dict[str, Any], *keys: str):
         except ValueError:
             continue
     return None
+
+
+def _normalized_cik(value: str | None) -> str | None:
+    if not value:
+        return None
+    digits = "".join(character for character in value if character.isdigit())
+    return digits.zfill(10) if digits else None

@@ -72,6 +72,19 @@ is ignored and `.env.example` documents the preferred variable name.
 FMP insider ownership is estimated from the latest reported Form 4 holdings
 divided by shares outstanding and is labeled as an estimate in the evaluation.
 
+## SEC EDGAR
+
+Set `SEC_USER_AGENT` to an application name and contact email, for example
+`Stock Screening Tool your-real-email@example.com`. The SEC may reject generic,
+placeholder, or non-contact identities. When insider data remains
+unavailable after Yahoo and FMP, the app uses SEC Forms 3, 4, and 5 to detect
+recent open-market purchases and estimate insider ownership. The estimate uses
+each insider's latest available reported common-share holdings and may be
+incomplete or include indirect holdings.
+
+EDGAR access is cached and rate-limited below the SEC's fair-access guideline of
+10 requests per second.
+
 ## Current Rule Coverage
 
 Included in the current screen:

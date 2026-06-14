@@ -8,6 +8,7 @@ from time import monotonic
 from models import CompanyMetrics
 
 from .fmp_client import enrich_with_fmp
+from .sec_client import enrich_with_sec
 from .yahoo_public_client import fetch_with_yahoo_public
 from .yfinance_client import YFinanceUnavailable, fetch_with_yfinance
 
@@ -30,6 +31,7 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
     try:
         metrics = fetch_with_yfinance(symbol)
         metrics = _supplement_with_fmp(metrics)
+        metrics = _supplement_with_sec(metrics)
         _set_cached(symbol, metrics)
         return deepcopy(metrics)
     except YFinanceUnavailable:
@@ -41,6 +43,7 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
         fallback = fetch_with_yahoo_public(symbol)
         fallback.source_notes.append(f"yfinance failed; used Yahoo public fallback instead: {primary_error}")
         fallback = _supplement_with_fmp(fallback)
+        fallback = _supplement_with_sec(fallback)
         _set_cached(symbol, fallback)
         return fallback
     except Exception as fallback_exc:
@@ -86,3 +89,18 @@ def _supplement_with_fmp(metrics: CompanyMetrics) -> CompanyMetrics:
 
 def _fmp_api_key() -> str:
     return os.environ.get("FMP_API_KEY", "").strip() or os.environ.get("FMP_API", "").strip()
+
+
+def _supplement_with_sec(metrics: CompanyMetrics) -> CompanyMetrics:
+    user_agent = _sec_user_agent()
+    if not user_agent:
+        return metrics
+    try:
+        return enrich_with_sec(metrics, user_agent)
+    except Exception as exc:
+        metrics.source_notes.append(f"SEC EDGAR supplement unavailable: {exc}")
+        return metrics
+
+
+def _sec_user_agent() -> str:
+    return os.environ.get("SEC_USER_AGENT", "").strip()
