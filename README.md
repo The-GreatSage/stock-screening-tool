@@ -42,6 +42,11 @@ service.
 
 Render supplies the public `$PORT`; the app binds to `0.0.0.0` when deployed.
 
+Yahoo may restrict requests from shared cloud-hosting IP addresses. When that
+happens, the app returns a partial evaluation with unavailable filters marked
+`Unknown` instead of failing the entire request. A licensed market-data API is
+recommended for reliable production use.
+
 ## Optional Data Dependency
 
 For richer company fundamentals, install:

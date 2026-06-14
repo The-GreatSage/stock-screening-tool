@@ -14,8 +14,20 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
     try:
         return fetch_with_yfinance(symbol)
     except YFinanceUnavailable:
-        return fetch_with_yahoo_public(symbol)
+        primary_error = "yfinance is not installed"
     except Exception as exc:
+        primary_error = str(exc)
+
+    try:
         fallback = fetch_with_yahoo_public(symbol)
-        fallback.source_notes.append(f"yfinance failed; used Yahoo public fallback instead: {exc}")
+        fallback.source_notes.append(f"yfinance failed; used Yahoo public fallback instead: {primary_error}")
         return fallback
+    except Exception as fallback_exc:
+        return CompanyMetrics(
+            ticker=symbol,
+            source_notes=[
+                "Live market data is temporarily unavailable.",
+                f"yfinance error: {primary_error}",
+                f"Yahoo quote fallback error: {fallback_exc}",
+            ],
+        )

@@ -19,11 +19,11 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
 
     symbol = ticker.upper().strip()
     stock = yf.Ticker(symbol)
-    info = stock.info or {}
-    financials = _safe_frame_dict(getattr(stock, "financials", None))
-    quarterly_financials = _safe_frame_dict(getattr(stock, "quarterly_financials", None))
-    balance_sheet = _safe_frame_dict(getattr(stock, "balance_sheet", None))
-    cashflow = _safe_frame_dict(getattr(stock, "cashflow", None))
+    info = _safe_dict_property(stock, "info")
+    financials = _safe_frame_dict(_safe_property(stock, "financials"))
+    quarterly_financials = _safe_frame_dict(_safe_property(stock, "quarterly_financials"))
+    balance_sheet = _safe_frame_dict(_safe_property(stock, "balance_sheet"))
+    cashflow = _safe_frame_dict(_safe_property(stock, "cashflow"))
     recent_insider_purchases = _recent_insider_purchases(_safe_property(stock, "insider_transactions"))
     institutional_holders = _institutional_holders(_safe_property(stock, "institutional_holders"))
 
@@ -69,7 +69,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         dividend_yield=_yield_decimal(info.get("dividendYield")),
         recent_insider_purchases=recent_insider_purchases,
         institutional_holders=institutional_holders,
-        source_notes=["Primary source: yfinance"],
+        source_notes=_source_notes(info, financials, balance_sheet),
         raw={},
     )
     return metrics
@@ -94,6 +94,33 @@ def _safe_property(stock: Any, name: str) -> Any:
         return getattr(stock, name, None)
     except Exception:
         return None
+
+
+def _safe_dict_property(stock: Any, name: str) -> dict[str, Any]:
+    value = _safe_property(stock, name)
+    return value if isinstance(value, dict) else {}
+
+
+def _source_notes(
+    info: dict[str, Any],
+    financials: dict[str, list[float]],
+    balance_sheet: dict[str, list[float]],
+) -> list[str]:
+    notes = ["Primary source: yfinance"]
+    missing = []
+    if not info:
+        missing.append("company profile and quote metrics")
+    if not financials:
+        missing.append("income statement")
+    if not balance_sheet:
+        missing.append("balance sheet")
+    if missing:
+        notes.append(
+            "Yahoo blocked or did not return: "
+            + ", ".join(missing)
+            + ". Those filters are marked Unknown."
+        )
+    return notes
 
 
 def _row_values(data: dict[str, list[float]], name: str) -> list[float]:
