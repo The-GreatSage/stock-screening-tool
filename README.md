@@ -65,8 +65,9 @@ The app still starts without `yfinance`, but more filters will be marked as `Unk
 ## Financial Modeling Prep
 
 Set `FMP_API_KEY` locally and in Render to supplement fields that Yahoo may
-block, including company profiles and insider transactions. Never commit the
-real API key; `.env` is ignored and `.env.example` documents the variable name.
+block, including company profiles and insider transactions. The legacy
+`FMP_API` variable name is also accepted. Never commit the real API key; `.env`
+is ignored and `.env.example` documents the preferred variable name.
 
 FMP insider ownership is estimated from the latest reported Form 4 holdings
 divided by shares outstanding and is labeled as an estimate in the evaluation.

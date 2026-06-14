@@ -13,6 +13,7 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data_sources.provider import fetch_company_metrics
+from data_sources.provider import _fmp_api_key
 from evaluator import evaluate_company
 
 
@@ -29,7 +30,7 @@ class StockScreeningHandler(SimpleHTTPRequestHandler):
             self.write_json(
                 {
                     "ok": True,
-                    "fmp_configured": bool(os.environ.get("FMP_API_KEY", "").strip()),
+                    "fmp_configured": bool(_fmp_api_key()),
                 }
             )
             return

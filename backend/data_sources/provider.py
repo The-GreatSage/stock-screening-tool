@@ -74,7 +74,7 @@ def _set_cached(symbol: str, metrics: CompanyMetrics, ttl_seconds: int = CACHE_T
 
 
 def _supplement_with_fmp(metrics: CompanyMetrics) -> CompanyMetrics:
-    api_key = os.environ.get("FMP_API_KEY", "").strip()
+    api_key = _fmp_api_key()
     if not api_key:
         return metrics
     try:
@@ -82,3 +82,7 @@ def _supplement_with_fmp(metrics: CompanyMetrics) -> CompanyMetrics:
     except Exception as exc:
         metrics.source_notes.append(f"FMP supplement unavailable: {exc}")
         return metrics
+
+
+def _fmp_api_key() -> str:
+    return os.environ.get("FMP_API_KEY", "").strip() or os.environ.get("FMP_API", "").strip()
