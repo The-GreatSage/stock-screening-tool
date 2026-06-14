@@ -72,6 +72,7 @@ class FMPClientTest(unittest.TestCase):
                         "netProfitMarginTTM": 0.11,
                         "operatingProfitMarginTTM": 0.12,
                         "debtEquityRatioTTM": 0.13,
+                        "priceEarningsRatioTTM": 99,
                     }
                 ],
                 True,
@@ -89,6 +90,8 @@ class FMPClientTest(unittest.TestCase):
             operating_margin_source="Yahoo reported TTM operating margin",
             debt_to_equity=0.23,
             debt_to_equity_source="Yahoo reported debt-to-equity",
+            trailing_pe=12,
+            trailing_pe_source="Yahoo reported trailing P/E",
             shares_outstanding=100,
             shares_outstanding_source="Yahoo reported shares outstanding",
         )
@@ -98,6 +101,7 @@ class FMPClientTest(unittest.TestCase):
         self.assertEqual(enriched.profit_margin, 0.21)
         self.assertEqual(enriched.operating_margin, 0.22)
         self.assertEqual(enriched.debt_to_equity, 0.23)
+        self.assertEqual(enriched.trailing_pe, 12)
         self.assertEqual(enriched.shares_outstanding, 100)
 
 

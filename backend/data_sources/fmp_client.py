@@ -59,12 +59,17 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
     if reported_shares is not None and metrics.shares_outstanding_source != "Yahoo reported shares outstanding":
         metrics.shares_outstanding = reported_shares
         metrics.shares_outstanding_source = "FMP reported shares outstanding"
-    fmp_pe = _number(quote, "pe", "priceEarningsRatio")
+    fmp_pe = _number(quote, "pe", "priceEarningsRatio") or _number(
+        ratios, "priceEarningsRatioTTM", "priceToEarningsRatioTTM", "priceEarningsRatio"
+    )
     if fmp_pe is not None and (
         metrics.trailing_pe is None or (metrics.trailing_pe_source or "").startswith("Derived")
     ):
         metrics.trailing_pe = fmp_pe
         metrics.trailing_pe_source = "FMP reported trailing P/E"
+    fmp_peg = _number(ratios, "priceEarningsToGrowthRatioTTM", "pegRatioTTM", "pegRatio")
+    if fmp_peg is not None:
+        metrics.peg_ratio = fmp_peg
     fmp_profit_margin = _number(ratios, "netProfitMarginTTM", "netProfitMargin")
     if fmp_profit_margin is not None and (
         metrics.profit_margin is None or (metrics.profit_margin_source or "").startswith("Derived")
