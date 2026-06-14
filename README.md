@@ -62,6 +62,15 @@ For richer company fundamentals, install:
 
 The app still starts without `yfinance`, but more filters will be marked as `Unknown`.
 
+## Financial Modeling Prep
+
+Set `FMP_API_KEY` locally and in Render to supplement fields that Yahoo may
+block, including company profiles and insider transactions. Never commit the
+real API key; `.env` is ignored and `.env.example` documents the variable name.
+
+FMP insider ownership is estimated from the latest reported Form 4 holdings
+divided by shares outstanding and is labeled as an estimate in the evaluation.
+
 ## Current Rule Coverage
 
 Included in the current screen:

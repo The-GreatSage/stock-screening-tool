@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import os
 from threading import Lock
 from time import monotonic
 
 from models import CompanyMetrics
 
+from .fmp_client import enrich_with_fmp
 from .yahoo_public_client import fetch_with_yahoo_public
 from .yfinance_client import YFinanceUnavailable, fetch_with_yfinance
 
@@ -27,6 +29,7 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
 
     try:
         metrics = fetch_with_yfinance(symbol)
+        metrics = _supplement_with_fmp(metrics)
         _set_cached(symbol, metrics)
         return deepcopy(metrics)
     except YFinanceUnavailable:
@@ -37,6 +40,7 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
     try:
         fallback = fetch_with_yahoo_public(symbol)
         fallback.source_notes.append(f"yfinance failed; used Yahoo public fallback instead: {primary_error}")
+        fallback = _supplement_with_fmp(fallback)
         _set_cached(symbol, fallback)
         return fallback
     except Exception as fallback_exc:
@@ -67,3 +71,14 @@ def _get_cached(symbol: str) -> CompanyMetrics | None:
 def _set_cached(symbol: str, metrics: CompanyMetrics, ttl_seconds: int = CACHE_TTL_SECONDS) -> None:
     with _cache_lock:
         _cache[symbol] = (monotonic() + ttl_seconds, metrics)
+
+
+def _supplement_with_fmp(metrics: CompanyMetrics) -> CompanyMetrics:
+    api_key = os.environ.get("FMP_API_KEY", "").strip()
+    if not api_key:
+        return metrics
+    try:
+        return enrich_with_fmp(metrics, api_key)
+    except Exception as exc:
+        metrics.source_notes.append(f"FMP supplement unavailable: {exc}")
+        return metrics

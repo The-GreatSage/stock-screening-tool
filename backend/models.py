@@ -52,6 +52,7 @@ class CompanyMetrics:
     shares_history: list[float] = field(default_factory=list)
     share_repurchase_history: list[float] = field(default_factory=list)
     insider_ownership: float | None = None
+    insider_ownership_source: str | None = None
     dividend_yield: float | None = None
     recent_insider_purchases: list[dict[str, Any]] = field(default_factory=list)
     recent_insider_purchases_available: bool = False

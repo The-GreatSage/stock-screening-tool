@@ -405,6 +405,7 @@ def _insider_ownership(metrics: CompanyMetrics) -> RuleResult:
         value=percent(ownership),
         target="> 5%",
         weight=2,
+        details=metrics.insider_ownership_source,
     )
 
 
