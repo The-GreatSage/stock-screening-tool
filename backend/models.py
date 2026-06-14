@@ -54,7 +54,9 @@ class CompanyMetrics:
     insider_ownership: float | None = None
     dividend_yield: float | None = None
     recent_insider_purchases: list[dict[str, Any]] = field(default_factory=list)
+    recent_insider_purchases_available: bool = False
     institutional_holders: list[dict[str, Any]] = field(default_factory=list)
+    institutional_holders_available: bool = False
     source_notes: list[str] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 

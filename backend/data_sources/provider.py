@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+from copy import deepcopy
+from threading import Lock
+from time import monotonic
+
 from models import CompanyMetrics
 
 from .yahoo_public_client import fetch_with_yahoo_public
 from .yfinance_client import YFinanceUnavailable, fetch_with_yfinance
+
+CACHE_TTL_SECONDS = 15 * 60
+_cache: dict[str, tuple[float, CompanyMetrics]] = {}
+_cache_lock = Lock()
 
 
 def fetch_company_metrics(ticker: str) -> CompanyMetrics:
@@ -11,8 +19,16 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
     if not symbol:
         raise ValueError("Ticker is required")
 
+    cached = _get_cached(symbol)
+    if cached is not None:
+        response = deepcopy(cached)
+        response.source_notes = [*response.source_notes, "Served from 15-minute cache."]
+        return response
+
     try:
-        return fetch_with_yfinance(symbol)
+        metrics = fetch_with_yfinance(symbol)
+        _set_cached(symbol, metrics)
+        return deepcopy(metrics)
     except YFinanceUnavailable:
         primary_error = "yfinance is not installed"
     except Exception as exc:
@@ -21,9 +37,10 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
     try:
         fallback = fetch_with_yahoo_public(symbol)
         fallback.source_notes.append(f"yfinance failed; used Yahoo public fallback instead: {primary_error}")
+        _set_cached(symbol, fallback)
         return fallback
     except Exception as fallback_exc:
-        return CompanyMetrics(
+        metrics = CompanyMetrics(
             ticker=symbol,
             source_notes=[
                 "Live market data is temporarily unavailable.",
@@ -31,3 +48,22 @@ def fetch_company_metrics(ticker: str) -> CompanyMetrics:
                 f"Yahoo quote fallback error: {fallback_exc}",
             ],
         )
+        _set_cached(symbol, metrics, ttl_seconds=60)
+        return metrics
+
+
+def _get_cached(symbol: str) -> CompanyMetrics | None:
+    with _cache_lock:
+        cached = _cache.get(symbol)
+        if cached is None:
+            return None
+        expires_at, metrics = cached
+        if expires_at <= monotonic():
+            _cache.pop(symbol, None)
+            return None
+        return metrics
+
+
+def _set_cached(symbol: str, metrics: CompanyMetrics, ttl_seconds: int = CACHE_TTL_SECONDS) -> None:
+    with _cache_lock:
+        _cache[symbol] = (monotonic() + ttl_seconds, metrics)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 import math
 from typing import Any
@@ -19,13 +20,31 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
 
     symbol = ticker.upper().strip()
     stock = yf.Ticker(symbol)
-    info = _safe_dict_property(stock, "info")
-    financials = _safe_frame_dict(_safe_property(stock, "financials"))
-    quarterly_financials = _safe_frame_dict(_safe_property(stock, "quarterly_financials"))
-    balance_sheet = _safe_frame_dict(_safe_property(stock, "balance_sheet"))
-    cashflow = _safe_frame_dict(_safe_property(stock, "cashflow"))
-    recent_insider_purchases = _recent_insider_purchases(_safe_property(stock, "insider_transactions"))
-    institutional_holders = _institutional_holders(_safe_property(stock, "institutional_holders"))
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {
+            "info": executor.submit(_safe_dict_property, stock, "info"),
+            "fast_info": executor.submit(_safe_fast_info, stock),
+            "financials": executor.submit(_safe_frame_property, stock, "financials"),
+            "quarterly_financials": executor.submit(_safe_frame_property, stock, "quarterly_financials"),
+            "balance_sheet": executor.submit(_safe_frame_property, stock, "balance_sheet"),
+            "cashflow": executor.submit(_safe_frame_property, stock, "cashflow"),
+            "insider_transactions": executor.submit(_safe_frame_property_raw, stock, "insider_transactions"),
+            "institutional_holders": executor.submit(_safe_frame_property_raw, stock, "institutional_holders"),
+        }
+        fetched = {name: future.result() for name, future in futures.items()}
+
+    info = fetched["info"]
+    fast_info = fetched["fast_info"]
+    financials = fetched["financials"]
+    quarterly_financials = fetched["quarterly_financials"]
+    balance_sheet = fetched["balance_sheet"]
+    cashflow = fetched["cashflow"]
+    recent_insider_purchases, recent_insider_purchases_available = _recent_insider_purchases(
+        fetched["insider_transactions"]
+    )
+    institutional_holders, institutional_holders_available = _institutional_holders(
+        fetched["institutional_holders"]
+    )
 
     revenue_history = _row_values(financials, "Total Revenue")
     earnings_history = _row_values(financials, "Net Income")
@@ -35,6 +54,43 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
 
     quarterly_earnings = _latest(_row_values(quarterly_financials, "Net Income"))
     annual_earnings = _latest(earnings_history)
+    latest_revenue = _latest(revenue_history)
+    operating_income = _latest(_row_values(financials, "Operating Income"))
+    latest_equity = _latest(_row_values(balance_sheet, "Stockholders Equity"))
+    statement_cash = _latest(_row_values(balance_sheet, "Cash Cash Equivalents And Short Term Investments"))
+    statement_debt = _latest(_row_values(balance_sheet, "Total Debt"))
+    statement_shares = _latest(_row_values(balance_sheet, "Ordinary Shares Number"))
+    diluted_shares = _latest(shares_history)
+
+    shares_outstanding = _first_number(
+        info.get("sharesOutstanding"),
+        fast_info.get("shares"),
+        statement_shares,
+        diluted_shares,
+    )
+    market_cap = _first_number(info.get("marketCap"), fast_info.get("marketCap"))
+    if market_cap is None:
+        last_price = _num(fast_info.get("lastPrice"))
+        if last_price is not None and shares_outstanding is not None:
+            market_cap = last_price * shares_outstanding
+
+    trailing_pe = _num(info.get("trailingPE"))
+    if trailing_pe is None and market_cap is not None and annual_earnings is not None and annual_earnings > 0:
+        trailing_pe = market_cap / annual_earnings
+
+    profit_margin = _num(info.get("profitMargins"))
+    if profit_margin is None and latest_revenue and annual_earnings is not None:
+        profit_margin = annual_earnings / latest_revenue
+
+    operating_margin = _num(info.get("operatingMargins"))
+    if operating_margin is None and latest_revenue and operating_income is not None:
+        operating_margin = operating_income / latest_revenue
+
+    total_cash = _first_number(info.get("totalCash"), statement_cash)
+    total_debt = _first_number(info.get("totalDebt"), statement_debt)
+    debt_to_equity = _num(info.get("debtToEquity"))
+    if debt_to_equity is None and total_debt is not None and latest_equity not in (None, 0):
+        debt_to_equity = total_debt / latest_equity
 
     roic, roic_details = _calculate_roic(financials, balance_sheet)
 
@@ -44,32 +100,39 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         sector=info.get("sector"),
         industry=info.get("industry"),
         business_summary=info.get("longBusinessSummary"),
-        market_cap=_num(info.get("marketCap")),
-        trailing_pe=_num(info.get("trailingPE")),
+        market_cap=market_cap,
+        trailing_pe=trailing_pe,
         forward_pe=_num(info.get("forwardPE")),
         peg_ratio=_num(info.get("pegRatio") or info.get("trailingPegRatio")),
         beta=_num(info.get("beta")),
-        profit_margin=_num(info.get("profitMargins")),
-        operating_margin=_num(info.get("operatingMargins")),
+        profit_margin=profit_margin,
+        operating_margin=operating_margin,
         return_on_invested_capital=roic,
         roic_details=roic_details,
-        total_cash=_num(info.get("totalCash")),
-        total_debt=_num(info.get("totalDebt")),
-        debt_to_equity=_num(info.get("debtToEquity")),
+        total_cash=total_cash,
+        total_debt=total_debt,
+        debt_to_equity=debt_to_equity,
         quarterly_earnings=quarterly_earnings,
         annual_earnings=annual_earnings,
         revenue_history=list(reversed(revenue_history)),
         earnings_history=list(reversed(earnings_history)),
         margin_history=list(reversed(margin_history)),
-        average_volume=_num(info.get("averageVolume") or info.get("averageDailyVolume10Day")),
-        shares_outstanding=_num(info.get("sharesOutstanding")),
+        average_volume=_first_number(
+            info.get("averageVolume"),
+            info.get("averageDailyVolume10Day"),
+            fast_info.get("threeMonthAverageVolume"),
+            fast_info.get("tenDayAverageVolume"),
+        ),
+        shares_outstanding=shares_outstanding,
         shares_history=list(reversed(shares_history)),
         share_repurchase_history=list(reversed(share_repurchase_history)),
         insider_ownership=_num(info.get("heldPercentInsiders")),
         dividend_yield=_yield_decimal(info.get("dividendYield")),
         recent_insider_purchases=recent_insider_purchases,
+        recent_insider_purchases_available=recent_insider_purchases_available,
         institutional_holders=institutional_holders,
-        source_notes=_source_notes(info, financials, balance_sheet),
+        institutional_holders_available=institutional_holders_available,
+        source_notes=_source_notes(info, fast_info, financials, balance_sheet),
         raw={},
     )
     return metrics
@@ -89,6 +152,17 @@ def _safe_frame_dict(frame: Any) -> dict[str, list[float]]:
         return {}
 
 
+def _safe_frame_property(stock: Any, name: str) -> dict[str, list[float]]:
+    return _safe_frame_dict(_safe_property(stock, name))
+
+
+def _safe_frame_property_raw(stock: Any, name: str) -> tuple[Any, bool]:
+    value = _safe_property(stock, name)
+    if value is None:
+        return None, False
+    return value, True
+
+
 def _safe_property(stock: Any, name: str) -> Any:
     try:
         return getattr(stock, name, None)
@@ -101,15 +175,23 @@ def _safe_dict_property(stock: Any, name: str) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _safe_fast_info(stock: Any) -> dict[str, Any]:
+    try:
+        return dict(stock.fast_info)
+    except Exception:
+        return {}
+
+
 def _source_notes(
     info: dict[str, Any],
+    fast_info: dict[str, Any],
     financials: dict[str, list[float]],
     balance_sheet: dict[str, list[float]],
 ) -> list[str]:
     notes = ["Primary source: yfinance"]
     missing = []
     if not info:
-        missing.append("company profile and quote metrics")
+        missing.append("company profile and some quote metrics")
     if not financials:
         missing.append("income statement")
     if not balance_sheet:
@@ -118,8 +200,12 @@ def _source_notes(
         notes.append(
             "Yahoo blocked or did not return: "
             + ", ".join(missing)
-            + ". Those filters are marked Unknown."
+            + ". Remaining unavailable filters are marked Unknown."
         )
+    if not info and fast_info:
+        notes.append("Price, market cap, volume, and shares were recovered from Yahoo fast price data.")
+    if not info and financials:
+        notes.append("Margins, P/E, cash, debt, and debt-to-equity were derived from financial statements where possible.")
     return notes
 
 
@@ -238,6 +324,14 @@ def _num(value: Any) -> float | None:
         return None
 
 
+def _first_number(*values: Any) -> float | None:
+    for value in values:
+        number = _num(value)
+        if number is not None:
+            return number
+    return None
+
+
 def _yield_decimal(value: Any) -> float | None:
     number = _num(value)
     if number is None:
@@ -247,12 +341,13 @@ def _yield_decimal(value: Any) -> float | None:
     return number
 
 
-def _recent_insider_purchases(frame: Any) -> list[dict[str, Any]]:
+def _recent_insider_purchases(frame_result: tuple[Any, bool]) -> tuple[list[dict[str, Any]], bool]:
+    frame, available = frame_result
     if frame is None:
-        return []
+        return [], False
     try:
         if frame.empty:
-            return []
+            return [], available
         cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=180)
         purchases = []
         for _, row in frame.iterrows():
@@ -276,17 +371,18 @@ def _recent_insider_purchases(frame: Any) -> list[dict[str, Any]]:
                     "value": _num(row.get("Value")),
                 }
             )
-        return purchases
+        return purchases, available
     except Exception:
-        return []
+        return [], False
 
 
-def _institutional_holders(frame: Any) -> list[dict[str, Any]]:
+def _institutional_holders(frame_result: tuple[Any, bool]) -> tuple[list[dict[str, Any]], bool]:
+    frame, available = frame_result
     if frame is None:
-        return []
+        return [], False
     try:
         if frame.empty:
-            return []
+            return [], available
         holders = []
         for _, row in frame.iterrows():
             percent = _num(row.get("pctHeld"))
@@ -300,6 +396,6 @@ def _institutional_holders(frame: Any) -> list[dict[str, Any]]:
                     "value": _num(row.get("Value")),
                 }
             )
-        return holders
+        return holders, available
     except Exception:
-        return []
+        return [], False

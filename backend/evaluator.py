@@ -437,6 +437,13 @@ def _yoy_revenue_growth(metrics: CompanyMetrics) -> RuleResult:
 
 def _recent_cluster_purchase(metrics: CompanyMetrics) -> RuleResult:
     purchases = metrics.recent_insider_purchases
+    if not metrics.recent_insider_purchases_available:
+        return unknown(
+            "recent_cluster_purchase",
+            "Recent cluster purchase",
+            "Recent insider transaction data unavailable.",
+            "Purchases by at least 2 distinct insiders within 180 days",
+        )
     if not purchases:
         return RuleResult(
             id="recent_cluster_purchase",
@@ -510,12 +517,22 @@ def _constant_revenue_earnings_growth(metrics: CompanyMetrics) -> RuleResult:
 
 def _strategic_investors(metrics: CompanyMetrics) -> RuleResult:
     holders = metrics.institutional_holders
-    if not holders:
+    if not metrics.institutional_holders_available:
         return unknown(
             "strategic_investors",
             "Strategic investors",
-            "Institutional holder data unavailable or no holder owns at least 1%.",
+            "Institutional holder data unavailable.",
             "Major institution >= 1% or any investor >= 5%",
+        )
+    if not holders:
+        return RuleResult(
+            id="strategic_investors",
+            name="Strategic investors",
+            status=RuleStatus.FAIL,
+            summary="No institutional holder owning at least 1% was found.",
+            value={"qualifying_count": 0, "holders": []},
+            target="Major institution >= 1% or any investor >= 5%",
+            weight=2,
         )
     major_terms = (
         "blackrock",

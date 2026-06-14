@@ -60,9 +60,11 @@ class EvaluatorTest(unittest.TestCase):
                 {"date": "2026-05-01", "insider": "Director One", "value": 500_000},
                 {"date": "2026-05-08", "insider": "Director Two", "value": 750_000},
             ],
+            recent_insider_purchases_available=True,
             institutional_holders=[
                 {"holder": "BlackRock Inc.", "percent_held": 0.06, "value": 90_000_000},
             ],
+            institutional_holders_available=True,
         )
 
         evaluation = evaluate_company(metrics)
@@ -80,6 +82,21 @@ class EvaluatorTest(unittest.TestCase):
         self.assertEqual(_status(evaluation, "recent_cluster_purchase"), "pass")
         self.assertEqual(_status(evaluation, "constant_revenue_earnings_growth"), "pass")
         self.assertEqual(_status(evaluation, "strategic_investors"), "pass")
+
+    def test_ownership_filters_distinguish_empty_from_unavailable(self):
+        available = evaluate_company(
+            CompanyMetrics(
+                ticker="EMPTY",
+                recent_insider_purchases_available=True,
+                institutional_holders_available=True,
+            )
+        )
+        unavailable = evaluate_company(CompanyMetrics(ticker="BLOCKED"))
+
+        self.assertEqual(_status(available, "recent_cluster_purchase"), "fail")
+        self.assertEqual(_status(available, "strategic_investors"), "fail")
+        self.assertEqual(_status(unavailable, "recent_cluster_purchase"), "unknown")
+        self.assertEqual(_status(unavailable, "strategic_investors"), "unknown")
 
 
 def _status(evaluation, rule_id):

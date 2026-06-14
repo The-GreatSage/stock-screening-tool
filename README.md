@@ -47,6 +47,11 @@ happens, the app returns a partial evaluation with unavailable filters marked
 `Unknown` instead of failing the entire request. A licensed market-data API is
 recommended for reliable production use.
 
+Independent Yahoo datasets are fetched concurrently, and completed evaluations
+are cached in memory for 15 minutes. When quote/profile fields are blocked, the
+app derives market cap, P/E, margins, cash, debt, and debt-to-equity from fast
+price data and financial statements where possible.
+
 ## Optional Data Dependency
 
 For richer company fundamentals, install:
