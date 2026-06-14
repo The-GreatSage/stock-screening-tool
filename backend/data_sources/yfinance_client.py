@@ -20,12 +20,13 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
 
     symbol = ticker.upper().strip()
     stock = yf.Ticker(symbol)
-    with ThreadPoolExecutor(max_workers=9) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         futures = {
             "info": executor.submit(_safe_dict_property, stock, "info"),
             "fast_info": executor.submit(_safe_fast_info, stock),
             "financials": executor.submit(_safe_frame_property, stock, "financials"),
             "quarterly_financials": executor.submit(_safe_frame_property, stock, "quarterly_financials"),
+            "ttm_income_stmt": executor.submit(_safe_frame_property, stock, "ttm_income_stmt"),
             "balance_sheet": executor.submit(_safe_frame_property, stock, "balance_sheet"),
             "cashflow": executor.submit(_safe_frame_property, stock, "cashflow"),
             "insider_transactions": executor.submit(_safe_frame_property_raw, stock, "insider_transactions"),
@@ -38,6 +39,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
     fast_info = fetched["fast_info"]
     financials = fetched["financials"]
     quarterly_financials = fetched["quarterly_financials"]
+    ttm_income_stmt = fetched["ttm_income_stmt"]
     balance_sheet = fetched["balance_sheet"]
     cashflow = fetched["cashflow"]
     recent_insider_purchases, recent_insider_purchases_available = _recent_insider_purchases(
@@ -54,8 +56,14 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
     share_repurchase_history = _row_values(cashflow, "Repurchase Of Capital Stock")
 
     quarterly_earnings = _latest(_row_values(quarterly_financials, "Net Income"))
-    trailing_earnings = _sum_latest(_row_values(quarterly_financials, "Net Income"), 4)
-    trailing_diluted_eps = _sum_latest(_row_values(quarterly_financials, "Diluted EPS"), 4)
+    trailing_earnings = _first_number(
+        _latest(_row_values(ttm_income_stmt, "Net Income")),
+        _sum_latest(_row_values(quarterly_financials, "Net Income"), 4),
+    )
+    trailing_diluted_eps = _first_number(
+        _latest(_row_values(ttm_income_stmt, "Diluted EPS")),
+        _sum_latest(_row_values(quarterly_financials, "Diluted EPS"), 4),
+    )
     annual_earnings = _latest(earnings_history)
     latest_revenue = _latest(revenue_history)
     operating_income = _latest(_row_values(financials, "Operating Income"))
