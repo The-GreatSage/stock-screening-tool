@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from data_sources.yfinance_client import _major_holder_value, _sum_latest
+from data_sources.yfinance_client import _major_holder_value, _percent_to_ratio, _sum_latest
 
 
 class Row:
@@ -27,6 +27,10 @@ class YFinanceClientTest(unittest.TestCase):
     def test_sums_exactly_four_latest_quarters(self):
         self.assertAlmostEqual(_sum_latest([0.16, 0.20, 0.23, 0.20, 0.20], 4), 0.79)
         self.assertIsNone(_sum_latest([0.16, 0.20, 0.23], 4))
+
+    def test_normalizes_yahoo_percentage_ratio(self):
+        self.assertAlmostEqual(_percent_to_ratio(0.264), 0.00264)
+        self.assertAlmostEqual(_percent_to_ratio(79.548), 0.79548)
 
 
 if __name__ == "__main__":

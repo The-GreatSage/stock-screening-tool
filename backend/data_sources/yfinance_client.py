@@ -20,7 +20,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
 
     symbol = ticker.upper().strip()
     stock = yf.Ticker(symbol)
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=11) as executor:
         futures = {
             "info": executor.submit(_safe_dict_property, stock, "info"),
             "fast_info": executor.submit(_safe_fast_info, stock),
@@ -28,6 +28,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
             "quarterly_financials": executor.submit(_safe_frame_property, stock, "quarterly_financials"),
             "ttm_income_stmt": executor.submit(_safe_frame_property, stock, "ttm_income_stmt"),
             "balance_sheet": executor.submit(_safe_frame_property, stock, "balance_sheet"),
+            "quarterly_balance_sheet": executor.submit(_safe_frame_property, stock, "quarterly_balance_sheet"),
             "cashflow": executor.submit(_safe_frame_property, stock, "cashflow"),
             "insider_transactions": executor.submit(_safe_frame_property_raw, stock, "insider_transactions"),
             "major_holders": executor.submit(_safe_frame_property_raw, stock, "major_holders"),
@@ -41,6 +42,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
     quarterly_financials = fetched["quarterly_financials"]
     ttm_income_stmt = fetched["ttm_income_stmt"]
     balance_sheet = fetched["balance_sheet"]
+    quarterly_balance_sheet = fetched["quarterly_balance_sheet"]
     cashflow = fetched["cashflow"]
     recent_insider_purchases, recent_insider_purchases_available = _recent_insider_purchases(
         fetched["insider_transactions"]
@@ -64,21 +66,39 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         _latest(_row_values(ttm_income_stmt, "Diluted EPS")),
         _sum_latest(_row_values(quarterly_financials, "Diluted EPS"), 4),
     )
-    annual_earnings = _latest(earnings_history)
+    latest_fiscal_earnings = _latest(earnings_history)
+    annual_earnings = _first_number(trailing_earnings, latest_fiscal_earnings)
+    annual_earnings_source = (
+        "Latest four quarters net income" if trailing_earnings is not None else "Latest fiscal-year net income"
+    )
     latest_revenue = _latest(revenue_history)
     operating_income = _latest(_row_values(financials, "Operating Income"))
-    latest_equity = _latest(_row_values(balance_sheet, "Stockholders Equity"))
-    statement_cash = _latest(_row_values(balance_sheet, "Cash Cash Equivalents And Short Term Investments"))
-    statement_debt = _latest(_row_values(balance_sheet, "Total Debt"))
+    ttm_revenue = _latest(_row_values(ttm_income_stmt, "Total Revenue"))
+    ttm_net_income = _latest(_row_values(ttm_income_stmt, "Net Income"))
+    ttm_operating_income = _latest(_row_values(ttm_income_stmt, "Operating Income"))
+    latest_equity = _first_number(
+        _latest(_row_values(quarterly_balance_sheet, "Stockholders Equity")),
+        _latest(_row_values(balance_sheet, "Stockholders Equity")),
+    )
+    statement_cash = _first_number(
+        _latest(_row_values(quarterly_balance_sheet, "Cash Cash Equivalents And Short Term Investments")),
+        _latest(_row_values(balance_sheet, "Cash Cash Equivalents And Short Term Investments")),
+    )
+    statement_debt = _first_number(
+        _latest(_row_values(quarterly_balance_sheet, "Total Debt")),
+        _latest(_row_values(balance_sheet, "Total Debt")),
+    )
     statement_shares = _latest(_row_values(balance_sheet, "Ordinary Shares Number"))
     diluted_shares = _latest(shares_history)
 
-    shares_outstanding = _first_number(
-        info.get("sharesOutstanding"),
-        fast_info.get("shares"),
-        statement_shares,
-        diluted_shares,
-    )
+    shares_outstanding = _num(info.get("sharesOutstanding"))
+    shares_outstanding_source = "Yahoo reported shares outstanding" if shares_outstanding is not None else None
+    if shares_outstanding is None:
+        shares_outstanding = _num(fast_info.get("shares"))
+        shares_outstanding_source = "Yahoo fast price shares" if shares_outstanding is not None else None
+    if shares_outstanding is None:
+        shares_outstanding = _first_number(statement_shares, diluted_shares)
+        shares_outstanding_source = "Latest statement share count" if shares_outstanding is not None else None
     market_cap = _first_number(info.get("marketCap"), fast_info.get("marketCap"))
     if market_cap is None:
         last_price = _num(fast_info.get("lastPrice"))
@@ -96,18 +116,30 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         trailing_pe_source = "Derived as market cap / latest four quarters net income"
 
     profit_margin = _num(info.get("profitMargins"))
-    if profit_margin is None and latest_revenue and annual_earnings is not None:
-        profit_margin = annual_earnings / latest_revenue
+    profit_margin_source = "Yahoo reported TTM profit margin" if profit_margin is not None else None
+    if profit_margin is None and ttm_revenue and ttm_net_income is not None:
+        profit_margin = ttm_net_income / ttm_revenue
+        profit_margin_source = "Derived as TTM net income / TTM revenue"
+    elif profit_margin is None and latest_revenue and latest_fiscal_earnings is not None:
+        profit_margin = latest_fiscal_earnings / latest_revenue
+        profit_margin_source = "Derived as latest annual net income / revenue"
 
     operating_margin = _num(info.get("operatingMargins"))
-    if operating_margin is None and latest_revenue and operating_income is not None:
+    operating_margin_source = "Yahoo reported TTM operating margin" if operating_margin is not None else None
+    if operating_margin is None and ttm_revenue and ttm_operating_income is not None:
+        operating_margin = ttm_operating_income / ttm_revenue
+        operating_margin_source = "Derived as TTM operating income / TTM revenue"
+    elif operating_margin is None and latest_revenue and operating_income is not None:
         operating_margin = operating_income / latest_revenue
+        operating_margin_source = "Derived as latest annual operating income / revenue"
 
     total_cash = _first_number(info.get("totalCash"), statement_cash)
     total_debt = _first_number(info.get("totalDebt"), statement_debt)
-    debt_to_equity = _num(info.get("debtToEquity"))
+    debt_to_equity = _percent_to_ratio(info.get("debtToEquity"))
+    debt_to_equity_source = "Yahoo reported debt-to-equity" if debt_to_equity is not None else None
     if debt_to_equity is None and total_debt is not None and latest_equity not in (None, 0):
         debt_to_equity = total_debt / latest_equity
+        debt_to_equity_source = "Derived from latest quarterly debt / stockholders equity"
 
     roic, roic_details = _calculate_roic(financials, balance_sheet)
 
@@ -124,14 +156,18 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         peg_ratio=_num(info.get("pegRatio") or info.get("trailingPegRatio")),
         beta=_num(info.get("beta")),
         profit_margin=profit_margin,
+        profit_margin_source=profit_margin_source,
         operating_margin=operating_margin,
+        operating_margin_source=operating_margin_source,
         return_on_invested_capital=roic,
         roic_details=roic_details,
         total_cash=total_cash,
         total_debt=total_debt,
         debt_to_equity=debt_to_equity,
+        debt_to_equity_source=debt_to_equity_source,
         quarterly_earnings=quarterly_earnings,
         annual_earnings=annual_earnings,
+        annual_earnings_source=annual_earnings_source,
         revenue_history=list(reversed(revenue_history)),
         earnings_history=list(reversed(earnings_history)),
         margin_history=list(reversed(margin_history)),
@@ -142,6 +178,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
             fast_info.get("tenDayAverageVolume"),
         ),
         shares_outstanding=shares_outstanding,
+        shares_outstanding_source=shares_outstanding_source,
         shares_history=list(reversed(shares_history)),
         share_repurchase_history=list(reversed(share_repurchase_history)),
         insider_ownership=_first_number(
@@ -366,6 +403,11 @@ def _yield_decimal(value: Any) -> float | None:
     if number > 0.2:
         return number / 100
     return number
+
+
+def _percent_to_ratio(value: Any) -> float | None:
+    number = _num(value)
+    return number / 100 if number is not None else None
 
 
 def _recent_insider_purchases(frame_result: tuple[Any, bool]) -> tuple[list[dict[str, Any]], bool]:

@@ -51,24 +51,38 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
     metrics.market_cap = metrics.market_cap or _number(quote, "marketCap") or _number(profile, "marketCap")
     metrics.beta = metrics.beta or _number(profile, "beta", "beta1Year")
     metrics.average_volume = metrics.average_volume or _number(quote, "avgVolume", "volume")
-    metrics.shares_outstanding = (
-        metrics.shares_outstanding
-        or _number(shares_float, "outstandingShares", "sharesOutstanding")
-        or _number(quote, "sharesOutstanding")
+    reported_shares = _number(shares_float, "outstandingShares", "sharesOutstanding") or _number(
+        quote, "sharesOutstanding"
     )
+    if reported_shares is not None and metrics.shares_outstanding_source != "Yahoo reported shares outstanding":
+        metrics.shares_outstanding = reported_shares
+        metrics.shares_outstanding_source = "FMP reported shares outstanding"
     fmp_pe = _number(quote, "pe", "priceEarningsRatio")
     if fmp_pe is not None and (
         metrics.trailing_pe is None or (metrics.trailing_pe_source or "").startswith("Derived")
     ):
         metrics.trailing_pe = fmp_pe
         metrics.trailing_pe_source = "FMP reported trailing P/E"
-    metrics.profit_margin = metrics.profit_margin or _number(ratios, "netProfitMarginTTM", "netProfitMargin")
-    metrics.operating_margin = metrics.operating_margin or _number(
-        ratios, "operatingProfitMarginTTM", "operatingProfitMargin"
-    )
-    metrics.debt_to_equity = metrics.debt_to_equity or _number(
+    fmp_profit_margin = _number(ratios, "netProfitMarginTTM", "netProfitMargin")
+    if fmp_profit_margin is not None and (
+        metrics.profit_margin is None or (metrics.profit_margin_source or "").startswith("Derived")
+    ):
+        metrics.profit_margin = fmp_profit_margin
+        metrics.profit_margin_source = "FMP reported TTM net profit margin"
+    fmp_operating_margin = _number(ratios, "operatingProfitMarginTTM", "operatingProfitMargin")
+    if fmp_operating_margin is not None and (
+        metrics.operating_margin is None or (metrics.operating_margin_source or "").startswith("Derived")
+    ):
+        metrics.operating_margin = fmp_operating_margin
+        metrics.operating_margin_source = "FMP reported TTM operating profit margin"
+    fmp_debt_to_equity = _number(
         ratios, "debtEquityRatioTTM", "debtToEquityRatioTTM", "debtEquityRatio"
     )
+    if fmp_debt_to_equity is not None and (
+        metrics.debt_to_equity is None or (metrics.debt_to_equity_source or "").startswith("Derived")
+    ):
+        metrics.debt_to_equity = fmp_debt_to_equity
+        metrics.debt_to_equity_source = "FMP reported debt-to-equity ratio"
     metrics.dividend_yield = metrics.dividend_yield or _number(ratios, "dividendYieldTTM", "dividendYield")
 
     purchases, trades_available = _recent_insider_purchases(insider_trades, responses["insider_trades"].available)

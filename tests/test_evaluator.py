@@ -98,6 +98,13 @@ class EvaluatorTest(unittest.TestCase):
         self.assertEqual(_status(unavailable, "recent_cluster_purchase"), "unknown")
         self.assertEqual(_status(unavailable, "strategic_investors"), "unknown")
 
+    def test_debt_to_equity_is_already_normalized(self):
+        evaluation = evaluate_company(CompanyMetrics(ticker="LOWDEBT", debt_to_equity=0.02477))
+        rule = next(rule for rule in evaluation.rules if rule.id == "debt_to_equity")
+
+        self.assertEqual(rule.status, "pass")
+        self.assertEqual(rule.value, 0.025)
+
 
 def _status(evaluation, rule_id):
     return next(rule.status for rule in evaluation.rules if rule.id == rule_id)

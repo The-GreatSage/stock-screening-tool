@@ -102,6 +102,7 @@ def _margins(metrics: CompanyMetrics) -> RuleResult:
         value=value,
         target="Profit >= 15% or operating >= 10%",
         weight=3,
+        details=f"Profit margin: {metrics.profit_margin_source or 'source unavailable'}. Operating margin: {metrics.operating_margin_source or 'source unavailable'}.",
     )
 
 
@@ -119,6 +120,7 @@ def _earnings_size(metrics: CompanyMetrics) -> RuleResult:
         value={"quarterly": money(q), "annual": money(annual)},
         target=">= $100M quarterly or >= $400M annually",
         weight=2,
+        details=metrics.annual_earnings_source,
     )
 
 
@@ -310,15 +312,15 @@ def _debt_to_equity(metrics: CompanyMetrics) -> RuleResult:
     dte = metrics.debt_to_equity
     if dte is None:
         return unknown("debt_to_equity", "Debt-to-equity", "Debt-to-equity data unavailable.", "< 0.5")
-    normalized = dte / 100 if dte > 10 else dte
     return RuleResult(
         id="debt_to_equity",
         name="Debt-to-equity",
-        status=RuleStatus.PASS if normalized < 0.5 else RuleStatus.FAIL,
-        summary="Debt-to-equity is below 0.5." if normalized < 0.5 else "Debt-to-equity is too high.",
-        value=round(normalized, 2),
+        status=RuleStatus.PASS if dte < 0.5 else RuleStatus.FAIL,
+        summary="Debt-to-equity is below 0.5." if dte < 0.5 else "Debt-to-equity is too high.",
+        value=round(dte, 3),
         target="< 0.5",
         weight=3,
+        details=metrics.debt_to_equity_source,
     )
 
 

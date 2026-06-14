@@ -63,6 +63,43 @@ class FMPClientTest(unittest.TestCase):
 
         self.assertEqual(metrics.sec_cik, "0000320193")
 
+    @patch("data_sources.fmp_client._get")
+    def test_does_not_replace_yahoo_reported_metrics(self, _get):
+        _get.side_effect = lambda path, _params, _key: (
+            FMPResponse(
+                [
+                    {
+                        "netProfitMarginTTM": 0.11,
+                        "operatingProfitMarginTTM": 0.12,
+                        "debtEquityRatioTTM": 0.13,
+                    }
+                ],
+                True,
+            )
+            if path == "ratios-ttm"
+            else FMPResponse([{"outstandingShares": 999}], True)
+            if path == "shares-float"
+            else FMPResponse()
+        )
+        metrics = CompanyMetrics(
+            ticker="TEST",
+            profit_margin=0.21,
+            profit_margin_source="Yahoo reported TTM profit margin",
+            operating_margin=0.22,
+            operating_margin_source="Yahoo reported TTM operating margin",
+            debt_to_equity=0.23,
+            debt_to_equity_source="Yahoo reported debt-to-equity",
+            shares_outstanding=100,
+            shares_outstanding_source="Yahoo reported shares outstanding",
+        )
+
+        enriched = enrich_with_fmp(metrics, "secret")
+
+        self.assertEqual(enriched.profit_margin, 0.21)
+        self.assertEqual(enriched.operating_margin, 0.22)
+        self.assertEqual(enriched.debt_to_equity, 0.23)
+        self.assertEqual(enriched.shares_outstanding, 100)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -132,8 +132,7 @@ function formatPercent(value) {
 
 function normalizeDebtEquity(value) {
   if (value === null || value === undefined) return "Unknown";
-  const number = Number(value);
-  return (number > 10 ? number / 100 : number).toFixed(2);
+  return Number(value).toFixed(3);
 }
 
 function formatValue(value) {

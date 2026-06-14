@@ -38,19 +38,24 @@ class CompanyMetrics:
     peg_ratio: float | None = None
     beta: float | None = None
     profit_margin: float | None = None
+    profit_margin_source: str | None = None
     operating_margin: float | None = None
+    operating_margin_source: str | None = None
     return_on_invested_capital: float | None = None
     roic_details: dict[str, Any] = field(default_factory=dict)
     total_cash: float | None = None
     total_debt: float | None = None
     debt_to_equity: float | None = None
+    debt_to_equity_source: str | None = None
     quarterly_earnings: float | None = None
     annual_earnings: float | None = None
+    annual_earnings_source: str | None = None
     revenue_history: list[float] = field(default_factory=list)
     earnings_history: list[float] = field(default_factory=list)
     margin_history: list[float] = field(default_factory=list)
     average_volume: float | None = None
     shares_outstanding: float | None = None
+    shares_outstanding_source: str | None = None
     shares_history: list[float] = field(default_factory=list)
     share_repurchase_history: list[float] = field(default_factory=list)
     insider_ownership: float | None = None
