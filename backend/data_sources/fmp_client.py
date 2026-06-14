@@ -84,6 +84,10 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
     successful = [name for name, response in responses.items() if response.available]
     if successful:
         metrics.source_notes.append("FMP supplement used: " + ", ".join(successful) + ".")
+    else:
+        metrics.source_notes.append(
+            "FMP_API_KEY is configured, but no requested FMP datasets were available for this ticker or plan."
+        )
     return metrics
 
 

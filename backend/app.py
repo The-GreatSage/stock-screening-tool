@@ -26,7 +26,12 @@ class StockScreeningHandler(SimpleHTTPRequestHandler):
             self.handle_evaluate(parsed)
             return
         if parsed.path == "/health":
-            self.write_json({"ok": True})
+            self.write_json(
+                {
+                    "ok": True,
+                    "fmp_configured": bool(os.environ.get("FMP_API_KEY", "").strip()),
+                }
+            )
             return
         super().do_GET()
 

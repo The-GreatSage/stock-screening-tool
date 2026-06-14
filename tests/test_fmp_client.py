@@ -6,7 +6,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from data_sources.fmp_client import _estimated_insider_ownership, _recent_insider_purchases
+from data_sources.fmp_client import (
+    FMPResponse,
+    _estimated_insider_ownership,
+    _recent_insider_purchases,
+    enrich_with_fmp,
+)
+from models import CompanyMetrics
+from unittest.mock import patch
 
 
 class FMPClientTest(unittest.TestCase):
@@ -40,6 +47,12 @@ class FMPClientTest(unittest.TestCase):
         self.assertTrue(available)
         self.assertEqual(len(purchases), 1)
         self.assertEqual(purchases[0]["value"], 2_000)
+
+    @patch("data_sources.fmp_client._get", return_value=FMPResponse())
+    def test_notes_when_key_is_configured_but_endpoints_are_unavailable(self, _get):
+        metrics = enrich_with_fmp(CompanyMetrics(ticker="TEST"), "secret")
+
+        self.assertIn("FMP_API_KEY is configured", metrics.source_notes[-1])
 
 
 if __name__ == "__main__":
