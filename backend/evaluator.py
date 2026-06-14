@@ -255,7 +255,10 @@ def _valuation_pe_peg_pegy(metrics: CompanyMetrics) -> RuleResult:
         value=value,
         target="P/E < 15 or PEG < 1 or PEGY < 1",
         weight=3,
-        details="PEGY is approximated as P/E divided by the latest earnings growth percentage plus dividend yield percentage.",
+        details=(
+            "PEGY is approximated as P/E divided by the latest earnings growth percentage plus dividend yield percentage. "
+            + (f"P/E source: {metrics.trailing_pe_source}." if metrics.trailing_pe_source else "")
+        ),
     )
 
 

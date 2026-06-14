@@ -37,6 +37,7 @@ def fetch_with_yahoo_public(ticker: str) -> CompanyMetrics:
         industry=item.get("industry"),
         market_cap=_num(item.get("marketCap")),
         trailing_pe=_num(item.get("trailingPE")),
+        trailing_pe_source="Yahoo public quote reported trailing P/E" if item.get("trailingPE") is not None else None,
         forward_pe=_num(item.get("forwardPE")),
         beta=_num(item.get("beta")),
         dividend_yield=_yield_decimal(item.get("trailingAnnualDividendYield")),

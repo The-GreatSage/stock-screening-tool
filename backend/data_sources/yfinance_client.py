@@ -54,6 +54,8 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
     share_repurchase_history = _row_values(cashflow, "Repurchase Of Capital Stock")
 
     quarterly_earnings = _latest(_row_values(quarterly_financials, "Net Income"))
+    trailing_earnings = _sum_latest(_row_values(quarterly_financials, "Net Income"), 4)
+    trailing_diluted_eps = _sum_latest(_row_values(quarterly_financials, "Diluted EPS"), 4)
     annual_earnings = _latest(earnings_history)
     latest_revenue = _latest(revenue_history)
     operating_income = _latest(_row_values(financials, "Operating Income"))
@@ -76,8 +78,14 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
             market_cap = last_price * shares_outstanding
 
     trailing_pe = _num(info.get("trailingPE"))
-    if trailing_pe is None and market_cap is not None and annual_earnings is not None and annual_earnings > 0:
-        trailing_pe = market_cap / annual_earnings
+    trailing_pe_source = "Yahoo reported trailing P/E" if trailing_pe is not None else None
+    last_price = _first_number(info.get("regularMarketPrice"), fast_info.get("lastPrice"))
+    if trailing_pe is None and last_price is not None and trailing_diluted_eps is not None and trailing_diluted_eps > 0:
+        trailing_pe = last_price / trailing_diluted_eps
+        trailing_pe_source = "Derived as current price / latest four quarters diluted EPS"
+    if trailing_pe is None and market_cap is not None and trailing_earnings is not None and trailing_earnings > 0:
+        trailing_pe = market_cap / trailing_earnings
+        trailing_pe_source = "Derived as market cap / latest four quarters net income"
 
     profit_margin = _num(info.get("profitMargins"))
     if profit_margin is None and latest_revenue and annual_earnings is not None:
@@ -103,6 +111,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         business_summary=info.get("longBusinessSummary"),
         market_cap=market_cap,
         trailing_pe=trailing_pe,
+        trailing_pe_source=trailing_pe_source,
         forward_pe=_num(info.get("forwardPE")),
         peg_ratio=_num(info.get("pegRatio") or info.get("trailingPegRatio")),
         beta=_num(info.get("beta")),
@@ -221,6 +230,12 @@ def _latest(values: list[float]) -> float | None:
     if not values:
         return None
     return values[0]
+
+
+def _sum_latest(values: list[float], count: int) -> float | None:
+    if len(values) < count:
+        return None
+    return sum(values[:count])
 
 
 def _margin_history(revenue: list[float], earnings: list[float]) -> list[float]:

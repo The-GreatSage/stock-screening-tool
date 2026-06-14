@@ -56,7 +56,12 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
         or _number(shares_float, "outstandingShares", "sharesOutstanding")
         or _number(quote, "sharesOutstanding")
     )
-    metrics.trailing_pe = metrics.trailing_pe or _number(quote, "pe", "priceEarningsRatio")
+    fmp_pe = _number(quote, "pe", "priceEarningsRatio")
+    if fmp_pe is not None and (
+        metrics.trailing_pe is None or (metrics.trailing_pe_source or "").startswith("Derived")
+    ):
+        metrics.trailing_pe = fmp_pe
+        metrics.trailing_pe_source = "FMP reported trailing P/E"
     metrics.profit_margin = metrics.profit_margin or _number(ratios, "netProfitMarginTTM", "netProfitMargin")
     metrics.operating_margin = metrics.operating_margin or _number(
         ratios, "operatingProfitMarginTTM", "operatingProfitMargin"

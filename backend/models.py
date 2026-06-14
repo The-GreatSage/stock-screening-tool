@@ -33,6 +33,7 @@ class CompanyMetrics:
     business_summary: str | None = None
     market_cap: float | None = None
     trailing_pe: float | None = None
+    trailing_pe_source: str | None = None
     forward_pe: float | None = None
     peg_ratio: float | None = None
     beta: float | None = None

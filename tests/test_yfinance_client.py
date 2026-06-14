@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from data_sources.yfinance_client import _major_holder_value
+from data_sources.yfinance_client import _major_holder_value, _sum_latest
 
 
 class Row:
@@ -23,6 +23,10 @@ class YFinanceClientTest(unittest.TestCase):
                 return {"insidersPercentHeld": Row(0.081)}
 
         self.assertEqual(_major_holder_value((TestFrame(), True), "insidersPercentHeld"), 0.081)
+
+    def test_sums_exactly_four_latest_quarters(self):
+        self.assertAlmostEqual(_sum_latest([0.16, 0.20, 0.23, 0.20, 0.20], 4), 0.79)
+        self.assertIsNone(_sum_latest([0.16, 0.20, 0.23], 4))
 
 
 if __name__ == "__main__":
