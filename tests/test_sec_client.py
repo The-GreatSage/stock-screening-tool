@@ -66,7 +66,7 @@ class SECClientTest(unittest.TestCase):
                 "recent": {
                     "form": ["4", "10-K"],
                     "accessionNumber": ["0001234567-26-000001", "0001234567-26-000002"],
-                    "primaryDocument": ["form4.xml", "annual.htm"],
+                    "primaryDocument": ["xslF345X06/form4.xml", "annual.htm"],
                     "filingDate": [date, date],
                 }
             }

@@ -152,7 +152,7 @@ def _ownership_filings(submissions: dict[str, Any], cik: str) -> list[dict[str, 
                 "url": SEC_ARCHIVES_URL.format(
                     cik=str(int(cik)),
                     accession=accession.replace("-", ""),
-                    document=document,
+                    document=document.rsplit("/", 1)[-1],
                 )
             }
         )
@@ -254,9 +254,9 @@ def _ownership_xml_bytes(document: bytes) -> bytes:
 
 
 def _failure_reason(exc: Exception) -> str:
+    if isinstance(exc, ET.ParseError):
+        return "invalid ownership XML"
     code = getattr(exc, "code", None)
     if code:
         return f"HTTP {code}"
-    if isinstance(exc, ET.ParseError):
-        return "invalid ownership XML"
     return exc.__class__.__name__
