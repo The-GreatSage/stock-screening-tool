@@ -215,7 +215,7 @@ h1 {
   background: #08080a;
   color: var(--ink);
   text-transform: uppercase;
-  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .ticker-row input::placeholder {
@@ -234,10 +234,6 @@ h1 {
 .ticker-row input:hover::placeholder,
 .ticker-row input:focus::placeholder {
   color: var(--muted);
-}
-
-.ticker-row input:focus {
-  transform: translateY(-1px);
 }
 
 .ticker-row button {
