@@ -21,6 +21,7 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
         "profile": ("profile", {"symbol": symbol}),
         "quote": ("quote", {"symbol": symbol}),
         "ratios": ("ratios-ttm", {"symbol": symbol}),
+        "balance_sheet": ("balance-sheet-statement", {"symbol": symbol, "period": "quarter", "limit": 1}),
         "shares_float": ("shares-float", {"symbol": symbol}),
         "insider_trades": ("insider-trading/search", {"symbol": symbol, "page": 0, "limit": 100}),
         "institutional": (
@@ -39,6 +40,7 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
     profile = _first(responses["profile"])
     quote = _first(responses["quote"])
     ratios = _first(responses["ratios"])
+    balance_sheet = _first(responses["balance_sheet"])
     shares_float = _first(responses["shares_float"])
     insider_trades = _records(responses["insider_trades"])
     institutional = _records(responses["institutional"])
@@ -83,6 +85,16 @@ def enrich_with_fmp(metrics: CompanyMetrics, api_key: str) -> CompanyMetrics:
     ):
         metrics.debt_to_equity = fmp_debt_to_equity
         metrics.debt_to_equity_source = "FMP reported debt-to-equity ratio"
+    fmp_cash = _number(balance_sheet, "cashAndShortTermInvestments", "cashAndCashEquivalents")
+    if fmp_cash is not None and metrics.total_cash_source != "Yahoo reported total cash":
+        _note_material_difference(metrics, "Total cash", metrics.total_cash, fmp_cash)
+        metrics.total_cash = fmp_cash
+        metrics.total_cash_source = "FMP reported latest-quarter cash"
+    fmp_debt = _number(balance_sheet, "totalDebt")
+    if fmp_debt is not None and metrics.total_debt_source != "Yahoo reported total debt":
+        _note_material_difference(metrics, "Total debt", metrics.total_debt, fmp_debt)
+        metrics.total_debt = fmp_debt
+        metrics.total_debt_source = "FMP reported latest-quarter total debt"
     metrics.dividend_yield = metrics.dividend_yield or _number(ratios, "dividendYieldTTM", "dividendYield")
 
     purchases, trades_available = _recent_insider_purchases(insider_trades, responses["insider_trades"].available)
@@ -262,3 +274,13 @@ def _normalized_cik(value: str | None) -> str | None:
         return None
     digits = "".join(character for character in value if character.isdigit())
     return digits.zfill(10) if digits else None
+
+
+def _note_material_difference(metrics: CompanyMetrics, label: str, existing: float | None, replacement: float) -> None:
+    if existing in (None, 0):
+        return
+    difference = abs(replacement - existing) / abs(existing)
+    if difference >= 0.20:
+        metrics.source_notes.append(
+            f"{label} differs materially between statement-derived and FMP reported values; using FMP."
+        )

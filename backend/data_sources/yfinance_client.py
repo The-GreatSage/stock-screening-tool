@@ -81,8 +81,18 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         _latest(_row_values(balance_sheet, "Stockholders Equity")),
     )
     statement_cash = _first_number(
-        _latest(_row_values(quarterly_balance_sheet, "Cash Cash Equivalents And Short Term Investments")),
-        _latest(_row_values(balance_sheet, "Cash Cash Equivalents And Short Term Investments")),
+        _latest_from_rows(
+            quarterly_balance_sheet,
+            "Cash Cash Equivalents And Short Term Investments",
+            "Cash Cash Equivalents And Federal Funds Sold",
+            "Cash And Cash Equivalents",
+        ),
+        _latest_from_rows(
+            balance_sheet,
+            "Cash Cash Equivalents And Short Term Investments",
+            "Cash Cash Equivalents And Federal Funds Sold",
+            "Cash And Cash Equivalents",
+        ),
     )
     statement_debt = _first_number(
         _latest(_row_values(quarterly_balance_sheet, "Total Debt")),
@@ -133,8 +143,16 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         operating_margin = operating_income / latest_revenue
         operating_margin_source = "Derived as latest annual operating income / revenue"
 
-    total_cash = _first_number(info.get("totalCash"), statement_cash)
-    total_debt = _first_number(info.get("totalDebt"), statement_debt)
+    total_cash = _num(info.get("totalCash"))
+    total_cash_source = "Yahoo reported total cash" if total_cash is not None else None
+    if total_cash is None:
+        total_cash = statement_cash
+        total_cash_source = "Latest quarterly balance-sheet cash" if total_cash is not None else None
+    total_debt = _num(info.get("totalDebt"))
+    total_debt_source = "Yahoo reported total debt" if total_debt is not None else None
+    if total_debt is None:
+        total_debt = statement_debt
+        total_debt_source = "Latest quarterly balance-sheet total debt" if total_debt is not None else None
     debt_to_equity = _percent_to_ratio(info.get("debtToEquity"))
     debt_to_equity_source = "Yahoo reported debt-to-equity" if debt_to_equity is not None else None
     if debt_to_equity is None and total_debt is not None and latest_equity not in (None, 0):
@@ -162,7 +180,9 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         return_on_invested_capital=roic,
         roic_details=roic_details,
         total_cash=total_cash,
+        total_cash_source=total_cash_source,
         total_debt=total_debt,
+        total_debt_source=total_debt_source,
         debt_to_equity=debt_to_equity,
         debt_to_equity_source=debt_to_equity_source,
         quarterly_earnings=quarterly_earnings,
@@ -275,6 +295,14 @@ def _latest(values: list[float]) -> float | None:
     if not values:
         return None
     return values[0]
+
+
+def _latest_from_rows(data: dict[str, list[float]], *names: str) -> float | None:
+    for name in names:
+        value = _latest(_row_values(data, name))
+        if value is not None:
+            return value
+    return None
 
 
 def _sum_latest(values: list[float], count: int) -> float | None:

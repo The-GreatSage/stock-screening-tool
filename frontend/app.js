@@ -114,6 +114,7 @@ function renderRule(rule) {
       </div>
       <p>${escapeHtml(rule.summary)}</p>
       ${rule.target ? `<p><strong>Target:</strong> ${escapeHtml(rule.target)}</p>` : ""}
+      ${rule.details ? `<p class="rule-details">${escapeHtml(rule.details)}</p>` : ""}
       ${rule.value !== null && rule.value !== undefined ? `<div class="rule-data">${escapeHtml(JSON.stringify(rule.value))}</div>` : ""}
     </article>
   `;

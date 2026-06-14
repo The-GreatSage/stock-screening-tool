@@ -200,6 +200,7 @@ def _cash_policy(metrics: CompanyMetrics) -> RuleResult:
         value={"cash": money(cash), "debt": money(debt), "cash_to_debt": round(ratio, 2) if ratio is not None else None},
         target="High cash and low/no debt",
         weight=2,
+        details=f"Cash: {metrics.total_cash_source or 'source unavailable'}. Debt: {metrics.total_debt_source or 'source unavailable'}.",
     )
 
 

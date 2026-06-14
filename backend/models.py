@@ -44,7 +44,9 @@ class CompanyMetrics:
     return_on_invested_capital: float | None = None
     roic_details: dict[str, Any] = field(default_factory=dict)
     total_cash: float | None = None
+    total_cash_source: str | None = None
     total_debt: float | None = None
+    total_debt_source: str | None = None
     debt_to_equity: float | None = None
     debt_to_equity_source: str | None = None
     quarterly_earnings: float | None = None
