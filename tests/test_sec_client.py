@@ -51,6 +51,14 @@ class SECClientTest(unittest.TestCase):
         self.assertEqual(parsed["purchases"][0]["value"], 2_000)
         self.assertEqual(parsed["purchases"][0]["position"], "Director")
 
+    def test_parses_ownership_xml_embedded_in_html(self):
+        date = (datetime.now(timezone.utc).date() - timedelta(days=5)).isoformat()
+        document = b"<html><body>" + FORM_4_XML.replace(b"{date}", date.encode()) + b"</body></html>"
+
+        parsed = parse_ownership_xml(document)
+
+        self.assertEqual(parsed["owner_name"], "Director One")
+
     def test_builds_recent_ownership_filing_urls(self):
         date = datetime.now(timezone.utc).date().isoformat()
         submissions = {

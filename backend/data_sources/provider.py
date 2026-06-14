@@ -103,4 +103,7 @@ def _supplement_with_sec(metrics: CompanyMetrics) -> CompanyMetrics:
 
 
 def _sec_user_agent() -> str:
-    return os.environ.get("SEC_USER_AGENT", "").strip()
+    value = os.environ.get("SEC_USER_AGENT", "").strip()
+    if value and "@" in value and " " not in value:
+        return f"StockScreeningTool/1.0 {value}"
+    return value

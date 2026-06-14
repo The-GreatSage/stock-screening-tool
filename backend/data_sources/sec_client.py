@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 import json
 import math
+import re
 from threading import Lock
 from time import monotonic, sleep
 from typing import Any
@@ -41,12 +42,15 @@ def enrich_with_sec(metrics: CompanyMetrics, user_agent: str) -> CompanyMetrics:
     purchases: list[dict[str, Any]] = []
     latest_holdings: dict[str, float] = {}
     successful_filings = 0
+    failure_reasons: dict[str, int] = {}
     for filing in filings:
         try:
             xml = _get_bytes(filing["url"], user_agent)
             parsed = parse_ownership_xml(xml)
             successful_filings += 1
-        except Exception:
+        except Exception as exc:
+            reason = _failure_reason(exc)
+            failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
             continue
 
         owner_key = parsed["owner_cik"] or parsed["owner_name"]
@@ -55,7 +59,11 @@ def enrich_with_sec(metrics: CompanyMetrics, user_agent: str) -> CompanyMetrics:
         purchases.extend(parsed["purchases"])
 
     if successful_filings == 0:
-        metrics.source_notes.append("SEC EDGAR ownership filings were listed but could not be downloaded.")
+        reasons = ", ".join(f"{reason} ({count})" for reason, count in failure_reasons.items())
+        metrics.source_notes.append(
+            "SEC EDGAR ownership filings were listed but could not be processed"
+            + (f": {reasons}." if reasons else ".")
+        )
         return metrics
 
     metrics.recent_insider_purchases = purchases
@@ -75,7 +83,7 @@ def enrich_with_sec(metrics: CompanyMetrics, user_agent: str) -> CompanyMetrics:
 
 
 def parse_ownership_xml(xml: bytes) -> dict[str, Any]:
-    root = ET.fromstring(xml)
+    root = ET.fromstring(_ownership_xml_bytes(xml))
     _remove_namespaces(root)
     owner_name = _find_text(root, ".//reportingOwnerId/rptOwnerName")
     owner_cik = _find_text(root, ".//reportingOwnerId/rptOwnerCik")
@@ -173,12 +181,16 @@ def _get_json(url: str, user_agent: str) -> dict[str, Any]:
 
 
 def _get_bytes(url: str, user_agent: str) -> bytes:
+    email_match = re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", user_agent)
+    headers = {
+        "Accept": "application/json, application/xml, text/xml, */*",
+        "User-Agent": user_agent,
+    }
+    if email_match:
+        headers["From"] = email_match.group(0)
     request = urllib.request.Request(
         url,
-        headers={
-            "Accept": "application/json, application/xml, text/xml",
-            "User-Agent": user_agent,
-        },
+        headers=headers,
     )
     with urllib.request.urlopen(request, timeout=12) as response:
         data = response.read()
@@ -231,3 +243,20 @@ def _parse_date(value: str | None):
         return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
     except ValueError:
         return None
+
+
+def _ownership_xml_bytes(document: bytes) -> bytes:
+    start = document.find(b"<ownershipDocument")
+    end = document.rfind(b"</ownershipDocument>")
+    if start >= 0 and end >= start:
+        return document[start : end + len(b"</ownershipDocument>")]
+    return document
+
+
+def _failure_reason(exc: Exception) -> str:
+    code = getattr(exc, "code", None)
+    if code:
+        return f"HTTP {code}"
+    if isinstance(exc, ET.ParseError):
+        return "invalid ownership XML"
+    return exc.__class__.__name__

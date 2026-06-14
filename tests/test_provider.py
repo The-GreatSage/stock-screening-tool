@@ -19,6 +19,10 @@ class ProviderTest(unittest.TestCase):
     def test_reads_sec_user_agent(self):
         self.assertEqual(_sec_user_agent(), "Stock Screening Tool test@example.com")
 
+    @patch.dict(os.environ, {"SEC_USER_AGENT": "test@example.com"})
+    def test_expands_email_only_sec_user_agent(self):
+        self.assertEqual(_sec_user_agent(), "StockScreeningTool/1.0 test@example.com")
+
     @patch("data_sources.provider.fetch_with_yahoo_public", side_effect=RuntimeError("fallback blocked"))
     @patch("data_sources.provider.fetch_with_yfinance", side_effect=RuntimeError("primary blocked"))
     def test_returns_partial_metrics_when_all_live_sources_fail(self, _primary, _fallback):

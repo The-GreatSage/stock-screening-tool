@@ -20,7 +20,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
 
     symbol = ticker.upper().strip()
     stock = yf.Ticker(symbol)
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=9) as executor:
         futures = {
             "info": executor.submit(_safe_dict_property, stock, "info"),
             "fast_info": executor.submit(_safe_fast_info, stock),
@@ -29,6 +29,7 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
             "balance_sheet": executor.submit(_safe_frame_property, stock, "balance_sheet"),
             "cashflow": executor.submit(_safe_frame_property, stock, "cashflow"),
             "insider_transactions": executor.submit(_safe_frame_property_raw, stock, "insider_transactions"),
+            "major_holders": executor.submit(_safe_frame_property_raw, stock, "major_holders"),
             "institutional_holders": executor.submit(_safe_frame_property_raw, stock, "institutional_holders"),
         }
         fetched = {name: future.result() for name, future in futures.items()}
@@ -126,7 +127,10 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         shares_outstanding=shares_outstanding,
         shares_history=list(reversed(shares_history)),
         share_repurchase_history=list(reversed(share_repurchase_history)),
-        insider_ownership=_num(info.get("heldPercentInsiders")),
+        insider_ownership=_first_number(
+            info.get("heldPercentInsiders"),
+            _major_holder_value(fetched["major_holders"], "insidersPercentHeld"),
+        ),
         dividend_yield=_yield_decimal(info.get("dividendYield")),
         recent_insider_purchases=recent_insider_purchases,
         recent_insider_purchases_available=recent_insider_purchases_available,
@@ -399,3 +403,18 @@ def _institutional_holders(frame_result: tuple[Any, bool]) -> tuple[list[dict[st
         return holders, available
     except Exception:
         return [], False
+
+
+def _major_holder_value(frame_result: tuple[Any, bool], row_name: str) -> float | None:
+    frame, available = frame_result
+    if not available or frame is None:
+        return None
+    try:
+        if row_name not in frame.index:
+            return None
+        row = frame.loc[row_name]
+        if hasattr(row, "iloc"):
+            return _num(row.iloc[0])
+        return _num(row)
+    except Exception:
+        return None
