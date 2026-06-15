@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data_sources.provider import fetch_company_metrics
 from data_sources.provider import _fmp_api_key, _sec_user_agent
+from data_sources.market_client import fetch_market_overview
 from evaluator import evaluate_company
 
 
@@ -25,6 +26,9 @@ class StockScreeningHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/evaluate":
             self.handle_evaluate(parsed)
+            return
+        if parsed.path == "/api/markets":
+            self.handle_markets()
             return
         if parsed.path == "/health":
             self.write_json(
@@ -48,6 +52,12 @@ class StockScreeningHandler(SimpleHTTPRequestHandler):
             self.write_json(evaluation)
         except Exception as exc:
             self.write_json({"error": str(exc)}, status=500)
+
+    def handle_markets(self):
+        try:
+            self.write_json(fetch_market_overview())
+        except Exception as exc:
+            self.write_json({"error": str(exc), "markets": []}, status=500)
 
     def write_json(self, payload, status=200):
         body = json.dumps(to_jsonable(payload), indent=2).encode("utf-8")

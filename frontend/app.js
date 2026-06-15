@@ -7,7 +7,9 @@ const screen = document.querySelector(".screen");
 const backgroundCanvas = document.querySelector("#market-background");
 const homeButton = document.querySelector("#home-button");
 const resetButton = document.querySelector("#reset-button");
+const marketTape = document.querySelector("#market-tape");
 let activeRequest = null;
+let activeMarketRequest = null;
 
 startMarketBackground(backgroundCanvas);
 homeButton.addEventListener("click", returnHome);
@@ -80,8 +82,12 @@ function showError(message) {
 function returnHome() {
   activeRequest?.abort();
   activeRequest = null;
+  activeMarketRequest?.abort();
+  activeMarketRequest = null;
   setLoading(false);
   screen.classList.remove("has-results");
+  marketTape.hidden = true;
+  marketTape.innerHTML = "";
   resultsNode.hidden = true;
   resultsNode.innerHTML = "";
   statusNode.innerHTML = "";
@@ -135,6 +141,79 @@ function renderResults(data) {
   `;
   resultsNode.hidden = false;
   screen.classList.add("has-results");
+  loadMarketOverview();
+}
+
+async function loadMarketOverview() {
+  activeMarketRequest?.abort();
+  const request = new AbortController();
+  activeMarketRequest = request;
+  marketTape.hidden = false;
+  marketTape.innerHTML = `
+    <div class="market-tape-head">
+      <span>US Markets</span>
+      <span class="market-tape-status">Loading live quotes</span>
+    </div>
+    <div class="market-tape-loading"></div>
+  `;
+  try {
+    const response = await fetch("/api/markets", { signal: request.signal });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Market quotes unavailable");
+    if (activeMarketRequest !== request) return;
+    renderMarketTape(payload.markets || []);
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    marketTape.innerHTML = `
+      <div class="market-tape-head">
+        <span>US Markets</span>
+        <span class="market-tape-status">Quotes temporarily unavailable</span>
+      </div>
+    `;
+  } finally {
+    if (activeMarketRequest === request) activeMarketRequest = null;
+  }
+}
+
+function renderMarketTape(markets) {
+  if (!markets.length) {
+    marketTape.innerHTML = `
+      <div class="market-tape-head">
+        <span>US Markets</span>
+        <span class="market-tape-status">Quotes temporarily unavailable</span>
+      </div>
+    `;
+    return;
+  }
+  const items = markets.map(renderMarketItem).join("");
+  marketTape.innerHTML = `
+    <div class="market-tape-head">
+      <span>US Markets</span>
+      <span class="market-tape-status">Latest quotes</span>
+    </div>
+    <div class="market-tape-window">
+      <div class="market-tape-track">
+        <div class="market-tape-group">${items}</div>
+        <div class="market-tape-group" aria-hidden="true">${items}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderMarketItem(market) {
+  const direction = Number(market.change) >= 0 ? "up" : "down";
+  return `
+    <article class="market-quote ${direction}">
+      <div>
+        <strong>${escapeHtml(market.name || market.symbol)}</strong>
+        <span>${escapeHtml(market.symbol || "")}</span>
+      </div>
+      <div class="market-quote-values">
+        <strong>${formatMarketPrice(market.price)}</strong>
+        <span>${formatMarketChange(market.change, market.change_percent)}</span>
+      </div>
+    </article>
+  `;
 }
 
 function metric(label, value) {
@@ -248,6 +327,21 @@ function formatSignedPercent(value) {
   if (value === null || value === undefined) return "Unknown";
   const number = Number(value);
   return `${number > 0 ? "+" : ""}${number.toFixed(1)}%`;
+}
+
+function formatMarketPrice(value) {
+  if (value === null || value === undefined) return "Unknown";
+  const number = Number(value);
+  return number >= 1000
+    ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(number)
+    : number.toFixed(2);
+}
+
+function formatMarketChange(change, percent) {
+  if (change === null || change === undefined) return "Change unavailable";
+  const number = Number(change);
+  const percentText = percent === null || percent === undefined ? "" : ` (${number >= 0 ? "+" : ""}${(Number(percent) * 100).toFixed(2)}%)`;
+  return `${number >= 0 ? "+" : ""}${number.toFixed(2)}${percentText}`;
 }
 
 function formatDate(value) {
