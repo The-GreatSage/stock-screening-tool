@@ -20,12 +20,12 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
 
     symbol = ticker.upper().strip()
     stock = yf.Ticker(symbol)
-    with ThreadPoolExecutor(max_workers=11) as executor:
+    with ThreadPoolExecutor(max_workers=13) as executor:
         futures = {
             "info": executor.submit(_safe_dict_property, stock, "info"),
             "fast_info": executor.submit(_safe_fast_info, stock),
             "financials": executor.submit(_safe_frame_property, stock, "financials"),
-            "quarterly_financials": executor.submit(_safe_frame_property, stock, "quarterly_financials"),
+            "quarterly_financials_raw": executor.submit(_safe_property, stock, "quarterly_financials"),
             "ttm_income_stmt": executor.submit(_safe_frame_property, stock, "ttm_income_stmt"),
             "balance_sheet": executor.submit(_safe_frame_property, stock, "balance_sheet"),
             "quarterly_balance_sheet": executor.submit(_safe_frame_property, stock, "quarterly_balance_sheet"),
@@ -33,13 +33,16 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
             "insider_transactions": executor.submit(_safe_frame_property_raw, stock, "insider_transactions"),
             "major_holders": executor.submit(_safe_frame_property_raw, stock, "major_holders"),
             "institutional_holders": executor.submit(_safe_frame_property_raw, stock, "institutional_holders"),
+            "news": executor.submit(_safe_news, stock),
+            "earnings_dates": executor.submit(_safe_earnings_dates, stock),
         }
         fetched = {name: future.result() for name, future in futures.items()}
 
     info = fetched["info"]
     fast_info = fetched["fast_info"]
     financials = fetched["financials"]
-    quarterly_financials = fetched["quarterly_financials"]
+    quarterly_financials_raw = fetched["quarterly_financials_raw"]
+    quarterly_financials = _safe_frame_dict(quarterly_financials_raw)
     ttm_income_stmt = fetched["ttm_income_stmt"]
     balance_sheet = fetched["balance_sheet"]
     quarterly_balance_sheet = fetched["quarterly_balance_sheet"]
@@ -50,6 +53,9 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
     institutional_holders, institutional_holders_available = _institutional_holders(
         fetched["institutional_holders"]
     )
+    recent_earnings_reports = _recent_earnings_reports(fetched["earnings_dates"])
+    if not recent_earnings_reports:
+        recent_earnings_reports = _quarterly_reports(quarterly_financials_raw)
 
     revenue_history = _row_values(financials, "Total Revenue")
     earnings_history = _row_values(financials, "Net Income")
@@ -210,6 +216,8 @@ def fetch_with_yfinance(ticker: str) -> CompanyMetrics:
         recent_insider_purchases_available=recent_insider_purchases_available,
         institutional_holders=institutional_holders,
         institutional_holders_available=institutional_holders_available,
+        recent_news=_recent_news(fetched["news"]),
+        recent_earnings_reports=recent_earnings_reports,
         source_notes=_source_notes(info, fast_info, financials, balance_sheet),
         raw={},
     )
@@ -258,6 +266,21 @@ def _safe_fast_info(stock: Any) -> dict[str, Any]:
         return dict(stock.fast_info)
     except Exception:
         return {}
+
+
+def _safe_news(stock: Any) -> list[dict[str, Any]]:
+    try:
+        news = stock.get_news(count=6, tab="news")
+        return news if isinstance(news, list) else []
+    except Exception:
+        return []
+
+
+def _safe_earnings_dates(stock: Any) -> Any:
+    try:
+        return stock.get_earnings_dates(limit=16)
+    except Exception:
+        return None
 
 
 def _source_notes(
@@ -496,6 +519,129 @@ def _institutional_holders(frame_result: tuple[Any, bool]) -> tuple[list[dict[st
         return holders, available
     except Exception:
         return [], False
+
+
+def _recent_news(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    news = []
+    for item in records:
+        if not isinstance(item, dict):
+            continue
+        content = item.get("content") if isinstance(item.get("content"), dict) else item
+        title = _text_value(content.get("title"))
+        if not title:
+            continue
+        provider = content.get("provider")
+        publisher = (
+            _text_value(provider.get("displayName"))
+            if isinstance(provider, dict)
+            else _text_value(content.get("publisher"))
+        )
+        url = _nested_url(content.get("canonicalUrl")) or _nested_url(content.get("clickThroughUrl"))
+        published = _iso_date(content.get("pubDate") or content.get("providerPublishTime"))
+        news.append(
+            {
+                "title": title,
+                "publisher": publisher or "Yahoo Finance",
+                "published": published,
+                "url": url,
+            }
+        )
+        if len(news) == 3:
+            break
+    return news
+
+
+def _recent_earnings_reports(frame: Any) -> list[dict[str, Any]]:
+    if frame is None:
+        return []
+    try:
+        if frame.empty:
+            return []
+        reports = []
+        for index, row in frame.iterrows():
+            reported_eps = _num(row.get("Reported EPS"))
+            if reported_eps is None:
+                continue
+            reports.append(
+                {
+                    "date": _iso_date(index),
+                    "reported_eps": reported_eps,
+                    "eps_estimate": _num(row.get("EPS Estimate")),
+                    "surprise_percent": _num(row.get("Surprise(%)")),
+                }
+            )
+        reports.sort(key=lambda report: report.get("date") or "", reverse=True)
+        return reports[:3]
+    except Exception:
+        return []
+
+
+def _quarterly_reports(frame: Any) -> list[dict[str, Any]]:
+    if frame is None:
+        return []
+    try:
+        if frame.empty:
+            return []
+        reports = []
+        for column in frame.columns:
+            revenue = _frame_number(frame, "Total Revenue", column)
+            net_income = _frame_number(frame, "Net Income", column)
+            diluted_eps = _frame_number(frame, "Diluted EPS", column)
+            if revenue is None and net_income is None and diluted_eps is None:
+                continue
+            reports.append(
+                {
+                    "date": _iso_date(column),
+                    "reported_eps": diluted_eps,
+                    "revenue": revenue,
+                    "net_income": net_income,
+                }
+            )
+        reports.sort(key=lambda report: report.get("date") or "", reverse=True)
+        return reports[:3]
+    except Exception:
+        return []
+
+
+def _frame_number(frame: Any, row_name: str, column: Any) -> float | None:
+    if row_name not in frame.index:
+        return None
+    return _num(frame.loc[row_name, column])
+
+
+def _nested_url(value: Any) -> str | None:
+    if isinstance(value, dict):
+        value = value.get("url")
+    text = _text_value(value)
+    return text if text and text.startswith(("https://", "http://")) else None
+
+
+def _text_value(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _iso_date(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, timezone.utc).date().isoformat()
+        except (OSError, OverflowError, ValueError):
+            return None
+    if hasattr(value, "to_pydatetime"):
+        value = value.to_pydatetime()
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    text = _text_value(value)
+    if not text:
+        return None
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).date().isoformat()
+    except ValueError:
+        return text[:10] if len(text) >= 10 else text
 
 
 def _major_holder_value(frame_result: tuple[Any, bool], row_name: str) -> float | None:

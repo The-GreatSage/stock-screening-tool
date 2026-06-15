@@ -67,6 +67,8 @@ class CompanyMetrics:
     recent_insider_purchases_available: bool = False
     institutional_holders: list[dict[str, Any]] = field(default_factory=list)
     institutional_holders_available: bool = False
+    recent_news: list[dict[str, Any]] = field(default_factory=list)
+    recent_earnings_reports: list[dict[str, Any]] = field(default_factory=list)
     source_notes: list[str] = field(default_factory=list)
     raw: dict[str, Any] = field(default_factory=dict)
 

@@ -5,8 +5,13 @@ const resultsNode = document.querySelector("#results");
 const submitButton = form.querySelector("button[type='submit']");
 const screen = document.querySelector(".screen");
 const backgroundCanvas = document.querySelector("#market-background");
+const homeButton = document.querySelector("#home-button");
+const resetButton = document.querySelector("#reset-button");
+let activeRequest = null;
 
 startMarketBackground(backgroundCanvas);
+homeButton.addEventListener("click", returnHome);
+resetButton.addEventListener("click", returnHome);
 
 input.addEventListener("input", () => {
   input.classList.toggle("has-value", Boolean(input.value.trim()));
@@ -23,18 +28,27 @@ form.addEventListener("submit", async (event) => {
   resultsNode.hidden = true;
   resultsNode.innerHTML = "";
   setLoading(true, ticker);
+  activeRequest?.abort();
+  const request = new AbortController();
+  activeRequest = request;
 
   try {
-    const response = await fetch(`/api/evaluate?ticker=${encodeURIComponent(ticker)}`);
+    const response = await fetch(`/api/evaluate?ticker=${encodeURIComponent(ticker)}`, {
+      signal: request.signal,
+    });
     const payload = await response.json();
     if (!response.ok) {
       throw new Error(payload.error || "Evaluation failed");
     }
+    if (activeRequest !== request) return;
     renderResults(payload);
     setLoading(false);
   } catch (error) {
+    if (error.name === "AbortError") return;
     setLoading(false);
     showError(error.message);
+  } finally {
+    if (activeRequest === request) activeRequest = null;
   }
 });
 
@@ -63,9 +77,25 @@ function showError(message) {
   statusNode.innerHTML = `<div class="error-message">${escapeHtml(message)}</div>`;
 }
 
+function returnHome() {
+  activeRequest?.abort();
+  activeRequest = null;
+  setLoading(false);
+  screen.classList.remove("has-results");
+  resultsNode.hidden = true;
+  resultsNode.innerHTML = "";
+  statusNode.innerHTML = "";
+  input.value = "";
+  input.classList.remove("has-value");
+  input.focus();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function renderResults(data) {
   const metrics = data.metrics || {};
   const rules = data.rules || [];
+  const recentNews = metrics.recent_news || [];
+  const earningsReports = metrics.recent_earnings_reports || [];
 
   resultsNode.innerHTML = `
     <section class="summary">
@@ -88,6 +118,17 @@ function renderResults(data) {
 
     <section class="rule-grid">
       ${rules.map(renderRule).join("")}
+    </section>
+
+    <section class="activity-section" aria-label="Recent company activity">
+      <div class="activity-heading">
+        <span>Recent activity</span>
+        <h2>News and earnings</h2>
+      </div>
+      <div class="activity-grid">
+        ${activityColumn("Most recent news", recentNews, renderNewsItem, "No recent company news was available.")}
+        ${activityColumn("Recent earnings reports", earningsReports, renderEarningsItem, "No completed earnings reports were available.")}
+      </div>
     </section>
 
     ${(data.source_notes || []).map((note) => `<div class="note">${escapeHtml(note)}</div>`).join("")}
@@ -120,6 +161,59 @@ function renderRule(rule) {
   `;
 }
 
+function activityColumn(title, items, renderer, emptyMessage) {
+  return `
+    <section class="activity-column">
+      <div class="activity-column-head">
+        <h3>${escapeHtml(title)}</h3>
+        <span>${items.length}</span>
+      </div>
+      <div class="activity-list">
+        ${items.length ? items.slice(0, 3).map(renderer).join("") : `<p class="activity-empty">${escapeHtml(emptyMessage)}</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderNewsItem(item) {
+  const title = escapeHtml(item.title || "Untitled news item");
+  const url = safeUrl(item.url);
+  return `
+    <article class="activity-item">
+      <div class="activity-meta">
+        <span>${escapeHtml(item.publisher || "Publisher unavailable")}</span>
+        <time>${formatDate(item.published)}</time>
+      </div>
+      <h4>${url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${title}</a>` : title}</h4>
+    </article>
+  `;
+}
+
+function renderEarningsItem(item) {
+  const hasEstimate = item.eps_estimate !== null && item.eps_estimate !== undefined;
+  const hasSurprise = item.surprise_percent !== null && item.surprise_percent !== undefined;
+  return `
+    <article class="activity-item earnings-item">
+      <div class="activity-meta">
+        <span>Earnings report</span>
+        <time>${formatDate(item.date)}</time>
+      </div>
+      <div class="earnings-values">
+        ${earningsValue("Reported EPS", formatNumber(item.reported_eps))}
+        ${hasEstimate || hasSurprise
+          ? `${earningsValue("Estimate", formatNumber(item.eps_estimate))}
+             ${earningsValue("Surprise", formatSignedPercent(item.surprise_percent))}`
+          : `${earningsValue("Revenue", formatValue(item.revenue))}
+             ${earningsValue("Net income", formatValue(item.net_income))}`}
+      </div>
+    </article>
+  `;
+}
+
+function earningsValue(label, value) {
+  return `<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
 function firstValue(...values) {
   const value = values.find((item) => item !== null && item !== undefined);
   if (value === undefined) return "Unknown";
@@ -143,6 +237,34 @@ function formatValue(value) {
   if (number >= 1_000_000) return `$${(number / 1_000_000).toFixed(2)}M`;
   if (number >= 1_000) return `$${(number / 1_000).toFixed(2)}K`;
   return `$${number.toFixed(2)}`;
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined) return "Unknown";
+  return Number(value).toFixed(2);
+}
+
+function formatSignedPercent(value) {
+  if (value === null || value === undefined) return "Unknown";
+  const number = Number(value);
+  return `${number > 0 ? "+" : ""}${number.toFixed(1)}%`;
+}
+
+function formatDate(value) {
+  if (!value) return "Date unavailable";
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return escapeHtml(value);
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function safeUrl(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 function escapeHtml(value) {
