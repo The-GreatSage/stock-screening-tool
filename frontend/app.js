@@ -12,6 +12,7 @@ let activeRequest = null;
 let activeMarketRequest = null;
 
 startMarketBackground(backgroundCanvas);
+loadMarketOverview();
 homeButton.addEventListener("click", returnHome);
 resetButton.addEventListener("click", returnHome);
 
@@ -86,14 +87,13 @@ function returnHome() {
   activeMarketRequest = null;
   setLoading(false);
   screen.classList.remove("has-results");
-  marketTape.hidden = true;
-  marketTape.innerHTML = "";
   resultsNode.hidden = true;
   resultsNode.innerHTML = "";
   statusNode.innerHTML = "";
   input.value = "";
   input.classList.remove("has-value");
   input.focus();
+  loadMarketOverview();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -141,7 +141,6 @@ function renderResults(data) {
   `;
   resultsNode.hidden = false;
   screen.classList.add("has-results");
-  loadMarketOverview();
 }
 
 async function loadMarketOverview() {

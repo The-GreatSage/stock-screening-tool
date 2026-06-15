@@ -91,7 +91,13 @@ input {
 
 .screen:not(.has-results) {
   min-height: calc(100vh - 112px);
-  align-content: center;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
+}
+
+.screen:not(.has-results) .intro {
+  align-self: center;
+  padding-bottom: 72px;
 }
 
 .screen.has-results .intro {
@@ -325,7 +331,7 @@ h1 {
   background: rgba(11, 11, 13, 0.94);
 }
 
-.market-tape[hidden] {
+.screen.has-results .market-tape {
   display: none;
 }
 
@@ -892,6 +898,10 @@ h1 {
 
   .screen:not(.has-results) {
     min-height: calc(100vh - 100px);
+  }
+
+  .screen:not(.has-results) .intro {
+    padding-bottom: 62px;
   }
 
   .screen.has-results .intro {
