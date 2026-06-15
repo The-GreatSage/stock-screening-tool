@@ -155,7 +155,7 @@ function renderResults(data) {
       </div>
     </section>
 
-    ${(data.source_notes || []).map((note) => `<div class="note">${escapeHtml(note)}</div>`).join("")}
+    ${renderSources(data.source_notes || [])}
   `;
   resultsNode.hidden = false;
   screen.classList.add("has-results");
@@ -435,18 +435,194 @@ function metric(label, value) {
   `;
 }
 
+const ruleTitles = {
+  roic: "ROIC",
+  buyback_dilution: "Cash Buyback",
+  margins: "Profit & Operating Margin",
+  earnings_size: "Company Earnings",
+  valuation: "P/E, PEG & PEGY",
+  market_cap: "Market Cap (Above $200M up to $7B)",
+  pe_end_of_run: "Extreme P/E",
+  debt_to_equity: "Debt-to-Equity Ratio",
+  yoy_revenue_growth: "YoY Revenue Growth (15%-20% YoY Growth)",
+  insider_ownership: "Insider Ownership",
+  margin_shrinkage: "Revenue Growth and Margin Shrinkage",
+  recent_cluster_purchase: "Recent Cluster Purchase",
+  constant_revenue_earnings_growth: "Constant Revenue Growth & Earnings",
+  strategic_investors: "Strategic Investors",
+};
+
+const ruleDescriptions = {
+  roic: "Measures after-tax operating profit against average invested capital.",
+  buyback_dilution: "Reviews diluted share-count history and reported cash spent on share repurchases.",
+  margins: "Compares current profit and operating margins with the preferred quality thresholds.",
+  earnings_size: "Uses the latest available quarterly and annual net income.",
+  valuation: "Compares earnings valuation with growth and dividend yield where the inputs are available.",
+  market_cap: "Uses the latest reported market capitalization to assess company size.",
+  pe_end_of_run: "Flags elevated valuation when trailing or forward P/E enters the 40-50 range.",
+  debt_to_equity: "Compares total debt with shareholder equity using the latest available balance sheet.",
+  yoy_revenue_growth: "Compares the latest annual revenue with the prior fiscal year.",
+  insider_ownership: "Measures shares held by insiders as a percentage of shares outstanding.",
+  margin_shrinkage: "Checks whether net profit margin is weakening while annual revenue grows.",
+  recent_cluster_purchase: "Checks for open-market purchases by multiple distinct insiders within 180 days.",
+  constant_revenue_earnings_growth: "Reviews annual revenue and net-income growth across available periods.",
+  strategic_investors: "Identifies sizable positions held by major institutions or potentially strategic investors.",
+};
+
+const ruleValueLabels = {
+  roic: "ROIC",
+  nopat: "NOPAT",
+  average_invested_capital: "Avg. Invested Capital",
+  tax_rate: "Tax Rate",
+  share_count_change: "Share Count Change",
+  latest_repurchase_cash_flow: "Latest Repurchase",
+  profit_margin: "Profit Margin",
+  operating_margin: "Operating Margin",
+  quarterly: "Quarterly Earnings",
+  annual: "Annual Earnings",
+  pe: "P/E",
+  peg: "PEG",
+  pegy: "PEGY",
+  latest_yoy_growth: "Latest YoY Growth",
+  first_margin: "First Margin",
+  latest_margin: "Latest Margin",
+  distinct_insiders: "Distinct Insiders",
+  purchase_count: "Purchases",
+  total_value: "Total Purchase Value",
+  qualifying_count: "Qualifying Investors",
+  revenue_growth: "Revenue Growth",
+  earnings_growth: "Earnings Growth",
+};
+
 function renderRule(rule) {
+  const title = ruleTitles[rule.id] || rule.name;
+  const details = rule.details || ruleDescriptions[rule.id];
   return `
     <article class="rule">
       <div class="rule-head">
-        <h3>${escapeHtml(rule.name)}</h3>
+        <h3>${escapeHtml(title)}</h3>
         <span class="pill ${escapeHtml(rule.status)}">${escapeHtml(rule.status)}</span>
       </div>
-      <p>${escapeHtml(rule.summary)}</p>
-      ${rule.target ? `<p><strong>Target:</strong> ${escapeHtml(rule.target)}</p>` : ""}
-      ${rule.details ? `<p class="rule-details">${escapeHtml(rule.details)}</p>` : ""}
-      ${rule.value !== null && rule.value !== undefined ? `<div class="rule-data">${escapeHtml(JSON.stringify(rule.value))}</div>` : ""}
+      ${renderRuleOutput(rule)}
+      ${rule.target ? `
+        <div class="rule-benchmark">
+          <span>Benchmark</span>
+          <strong>${escapeHtml(rule.target)}</strong>
+        </div>
+      ` : ""}
+      <p class="rule-summary">${escapeHtml(rule.summary)}</p>
+      ${details ? `<p class="rule-details">${escapeHtml(details)}</p>` : ""}
     </article>
+  `;
+}
+
+function renderRuleOutput(rule) {
+  if (rule.value === null || rule.value === undefined) {
+    return `<div class="rule-output rule-output-empty">Data unavailable</div>`;
+  }
+  if (rule.id === "strategic_investors") return renderStrategicInvestors(rule.value);
+  if (rule.id === "recent_cluster_purchase") return renderClusterPurchase(rule.value);
+  if (rule.id === "constant_revenue_earnings_growth") return renderGrowthSeries(rule.value);
+  if (typeof rule.value !== "object" || Array.isArray(rule.value)) {
+    return `<div class="rule-output rule-output-primary">${escapeHtml(displayRuleValue(rule.value))}</div>`;
+  }
+  const entries = Object.entries(rule.value).filter(([, value]) => !Array.isArray(value) && typeof value !== "object");
+  if (!entries.length) return `<div class="rule-output rule-output-empty">Data unavailable</div>`;
+  return `
+    <div class="rule-output rule-output-grid">
+      ${entries.map(([key, value]) => ruleOutputItem(ruleValueLabel(key), displayRuleValue(value))).join("")}
+    </div>
+  `;
+}
+
+function renderStrategicInvestors(value) {
+  const holders = Array.isArray(value?.holders) ? value.holders.slice(0, 3) : [];
+  return `
+    <div class="rule-output rule-output-stack">
+      ${ruleOutputItem("Qualifying Investors", displayRuleValue(value?.qualifying_count))}
+      ${holders.length ? `
+        <div class="rule-output-list">
+          ${holders.map((holder) => `
+            <div>
+              <strong>${escapeHtml(holder.holder || "Unknown investor")}</strong>
+              <span>${escapeHtml(displayRuleValue(holder.percent_held))}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderClusterPurchase(value) {
+  const entries = ["distinct_insiders", "purchase_count", "total_value"]
+    .filter((key) => value?.[key] !== null && value?.[key] !== undefined);
+  const purchases = Array.isArray(value?.purchases) ? value.purchases.slice(0, 2) : [];
+  return `
+    <div class="rule-output rule-output-stack">
+      <div class="rule-output-grid">
+        ${entries.map((key) => ruleOutputItem(ruleValueLabel(key), displayRuleValue(value[key]))).join("")}
+      </div>
+      ${purchases.length ? `
+        <div class="rule-output-list">
+          ${purchases.map((purchase) => `
+            <div>
+              <strong>${escapeHtml(purchase.insider || "Unknown insider")}</strong>
+              <span>${escapeHtml(displayRuleValue(purchase.value || purchase.date))}</span>
+            </div>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
+function renderGrowthSeries(value) {
+  const entries = ["revenue_growth", "earnings_growth"];
+  return `
+    <div class="rule-output rule-output-series">
+      ${entries.map((key) => `
+        <div>
+          <span>${escapeHtml(ruleValueLabel(key))}</span>
+          <strong>${escapeHtml(displayRuleValue(value?.[key]))}</strong>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function ruleOutputItem(label, value) {
+  return `
+    <div class="rule-output-item">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+    </div>
+  `;
+}
+
+function ruleValueLabel(key) {
+  return ruleValueLabels[key] || key.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function displayRuleValue(value) {
+  if (value === null || value === undefined || value === "") return "Unavailable";
+  if (Array.isArray(value)) return value.length ? value.map(displayRuleValue).join(" → ") : "Unavailable";
+  if (typeof value === "number") return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  return String(value);
+}
+
+function renderSources(notes) {
+  if (!notes.length) return "";
+  return `
+    <details class="sources">
+      <summary>
+        <span>Sources & data notes</span>
+        <strong>${notes.length}</strong>
+      </summary>
+      <div class="sources-list">
+        ${notes.map((note) => `<p>${escapeHtml(note)}</p>`).join("")}
+      </div>
+    </details>
   `;
 }
 
