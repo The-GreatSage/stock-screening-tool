@@ -267,9 +267,12 @@ h1 {
 .ticker-row input:focus,
 .ticker-row input.has-value {
   border-color: #ffffff;
-  background: #0b0b0d;
+  background: #08080a;
   color: var(--ink);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.52), 0 0 24px rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.78),
+    0 0 14px rgba(255, 255, 255, 0.3),
+    0 0 32px rgba(255, 255, 255, 0.16);
 }
 
 .ticker-row input:hover::placeholder,
@@ -333,10 +336,19 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(11, 11, 13, 0.94);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .screen.has-results .market-tape {
   display: none;
+}
+
+.market-tape:hover {
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 18px rgba(255, 255, 255, 0.18),
+    0 0 36px rgba(255, 255, 255, 0.1);
 }
 
 .market-tape-head {
@@ -771,18 +783,25 @@ h1 {
 }
 
 .rule:hover {
-  border-color: rgba(255, 255, 255, 0.9);
-  background: var(--panel-raised);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.14), 0 0 22px rgba(255, 255, 255, 0.13);
+  border-color: #ffffff;
+  background: rgba(11, 11, 13, 0.94);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.24),
+    0 0 18px rgba(255, 255, 255, 0.2),
+    0 0 36px rgba(255, 255, 255, 0.11);
   transform: translateY(-2px);
 }
 
 .summary:hover,
 .metric:hover,
+.performance-chart:hover,
 .note:hover {
-  border-color: rgba(255, 255, 255, 0.85);
-  background: var(--panel-raised);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 0 20px rgba(255, 255, 255, 0.11);
+  border-color: #ffffff;
+  background: rgba(11, 11, 13, 0.94);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.24),
+    0 0 18px rgba(255, 255, 255, 0.2),
+    0 0 36px rgba(255, 255, 255, 0.11);
 }
 
 .metric:hover {
@@ -902,8 +921,12 @@ h1 {
 }
 
 .activity-column:hover {
-  border-color: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.09);
+  border-color: #ffffff;
+  background: rgba(11, 11, 13, 0.94);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.24),
+    0 0 18px rgba(255, 255, 255, 0.2),
+    0 0 36px rgba(255, 255, 255, 0.11);
 }
 
 .activity-column-head {
