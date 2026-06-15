@@ -766,6 +766,8 @@ def money(value: float | None) -> str | None:
         return None
     sign = "-" if value < 0 else ""
     value = abs(value)
+    if value >= 1_000_000_000_000:
+        return f"{sign}${value / 1_000_000_000_000:.2f}T"
     if value >= 1_000_000_000:
         return f"{sign}${value / 1_000_000_000:.2f}B"
     if value >= 1_000_000:

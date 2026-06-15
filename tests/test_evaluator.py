@@ -5,12 +5,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
-from evaluator import evaluate_company
+from evaluator import evaluate_company, money
 from data_sources.yfinance_client import _calculate_roic
 from models import CompanyMetrics
 
 
 class EvaluatorTest(unittest.TestCase):
+    def test_money_formats_trillion_scale_values(self):
+        self.assertEqual(money(4_980_000_000_000), "$4.98T")
+
     def test_roic_uses_average_invested_capital(self):
         roic, details = _calculate_roic(
             {

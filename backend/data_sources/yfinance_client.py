@@ -546,7 +546,7 @@ def _recent_news(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "url": url,
             }
         )
-        if len(news) == 3:
+        if len(news) == 5:
             break
     return news
 
@@ -571,7 +571,7 @@ def _recent_earnings_reports(frame: Any) -> list[dict[str, Any]]:
                 }
             )
         reports.sort(key=lambda report: report.get("date") or "", reverse=True)
-        return reports[:3]
+        return reports[:5]
     except Exception:
         return []
 
@@ -598,7 +598,7 @@ def _quarterly_reports(frame: Any) -> list[dict[str, Any]]:
                 }
             )
         reports.sort(key=lambda report: report.get("date") or "", reverse=True)
-        return reports[:3]
+        return reports[:5]
     except Exception:
         return []
 

@@ -634,7 +634,7 @@ function activityColumn(title, items, renderer, emptyMessage) {
         <span>${items.length}</span>
       </div>
       <div class="activity-list">
-        ${items.length ? items.slice(0, 3).map(renderer).join("") : `<p class="activity-empty">${escapeHtml(emptyMessage)}</p>`}
+        ${items.length ? items.slice(0, 5).map(renderer).join("") : `<p class="activity-empty">${escapeHtml(emptyMessage)}</p>`}
       </div>
     </section>
   `;
@@ -698,6 +698,7 @@ function normalizeDebtEquity(value) {
 function formatValue(value) {
   if (value === null || value === undefined) return "Unknown";
   const number = Number(value);
+  if (number >= 1_000_000_000_000) return `$${(number / 1_000_000_000_000).toFixed(2)}T`;
   if (number >= 1_000_000_000) return `$${(number / 1_000_000_000).toFixed(2)}B`;
   if (number >= 1_000_000) return `$${(number / 1_000_000).toFixed(2)}M`;
   if (number >= 1_000) return `$${(number / 1_000).toFixed(2)}K`;
