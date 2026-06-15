@@ -60,6 +60,8 @@ def fetch_relative_performance(ticker: str, sector: str = "", industry: str = ""
     series = []
     for series_symbol, name in labels:
         points = _series_from_frame(frame, series_symbol, len(labels))
+        if not points:
+            points = _download_single_series(yf, series_symbol)
         if points:
             series.append({"symbol": series_symbol, "name": name, "points": points})
 
@@ -70,7 +72,7 @@ def fetch_relative_performance(ticker: str, sector: str = "", industry: str = ""
         "series": series,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
-    if series:
+    if any(item["symbol"] == symbol for item in series):
         with _performance_cache_lock:
             _performance_cache[cache_key] = (monotonic() + PERFORMANCE_CACHE_SECONDS, payload)
     return payload
@@ -121,6 +123,21 @@ def _series_from_frame(frame: Any, symbol: str, symbol_count: int) -> list[dict[
     except Exception:
         return []
     return _normalize_points(dates, values)
+
+
+def _download_single_series(yf: Any, symbol: str) -> list[dict[str, Any]]:
+    try:
+        frame = yf.download(
+            symbol,
+            period="1y",
+            interval="1d",
+            progress=False,
+            threads=False,
+            auto_adjust=True,
+        )
+    except Exception:
+        return []
+    return _series_from_frame(frame, symbol, 1)
 
 
 def _normalize_points(dates: list[Any], values: list[Any]) -> list[dict[str, Any]]:
