@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from data_sources.provider import fetch_company_metrics
 from data_sources.provider import _fmp_api_key, _sec_user_agent
 from data_sources.market_client import fetch_market_overview
+from data_sources.performance_client import fetch_relative_performance
 from evaluator import evaluate_company
 
 
@@ -29,6 +30,9 @@ class StockScreeningHandler(SimpleHTTPRequestHandler):
             return
         if parsed.path == "/api/markets":
             self.handle_markets()
+            return
+        if parsed.path == "/api/performance":
+            self.handle_performance(parsed)
             return
         if parsed.path == "/health":
             self.write_json(
@@ -58,6 +62,23 @@ class StockScreeningHandler(SimpleHTTPRequestHandler):
             self.write_json(fetch_market_overview())
         except Exception as exc:
             self.write_json({"error": str(exc), "markets": []}, status=500)
+
+    def handle_performance(self, parsed):
+        query = parse_qs(parsed.query)
+        ticker = query.get("ticker", [""])[0].strip().upper()
+        if not ticker:
+            self.write_json({"error": "Ticker is required"}, status=400)
+            return
+        try:
+            self.write_json(
+                fetch_relative_performance(
+                    ticker,
+                    query.get("sector", [""])[0].strip(),
+                    query.get("industry", [""])[0].strip(),
+                )
+            )
+        except Exception as exc:
+            self.write_json({"error": str(exc), "series": []}, status=500)
 
     def write_json(self, payload, status=200):
         body = json.dumps(to_jsonable(payload), indent=2).encode("utf-8")

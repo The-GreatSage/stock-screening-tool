@@ -568,6 +568,7 @@ h1 {
 
 .metric,
 .rule,
+.performance-chart,
 .activity-column,
 .note {
   background: rgba(11, 11, 13, 0.94);
@@ -594,6 +595,163 @@ h1 {
   margin-top: 5px;
   overflow-wrap: anywhere;
   font-size: 17px;
+}
+
+.performance-chart {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+}
+
+.performance-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: end;
+}
+
+.performance-head span {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.performance-head h2 {
+  margin: 3px 0 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.performance-head p {
+  margin: 4px 0 0;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.performance-periods {
+  display: flex;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+}
+
+.performance-periods button {
+  width: 42px;
+  height: 28px;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: #08080a;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.performance-periods button:last-child {
+  border-right: 0;
+}
+
+.performance-periods button:hover,
+.performance-periods button:focus-visible,
+.performance-periods button.active {
+  background: #ffffff;
+  color: #050505;
+}
+
+.performance-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  min-height: 18px;
+}
+
+.performance-legend span,
+.performance-tooltip span {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.performance-legend i,
+.performance-tooltip i {
+  width: 8px;
+  height: 2px;
+  flex: 0 0 auto;
+  background: var(--series-color);
+}
+
+.performance-canvas-wrap {
+  position: relative;
+  height: 320px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.performance-canvas-wrap canvas {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.performance-tooltip {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  gap: 5px;
+  width: 176px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: rgba(5, 5, 6, 0.96);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.48);
+  pointer-events: none;
+}
+
+.performance-tooltip[hidden] {
+  display: none;
+}
+
+.performance-tooltip time {
+  color: var(--faint);
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.performance-tooltip span {
+  justify-content: space-between;
+}
+
+.performance-tooltip strong {
+  margin-left: auto;
+  color: var(--ink);
+  font-size: 10px;
+}
+
+.performance-loading,
+.performance-empty {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.performance-loading::before {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line-strong);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  content: "";
+  animation: loader-spin 1s linear infinite;
 }
 
 .rule-grid {
@@ -930,6 +1088,23 @@ h1 {
 
   .rule-grid {
     grid-template-columns: 1fr;
+  }
+
+  .performance-chart {
+    padding: 11px;
+  }
+
+  .performance-head {
+    display: grid;
+    align-items: start;
+  }
+
+  .performance-periods {
+    justify-self: start;
+  }
+
+  .performance-canvas-wrap {
+    height: 260px;
   }
 
   .activity-grid {

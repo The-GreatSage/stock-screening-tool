@@ -10,6 +10,8 @@ const resetButton = document.querySelector("#reset-button");
 const marketTape = document.querySelector("#market-tape");
 let activeRequest = null;
 let activeMarketRequest = null;
+let activePerformanceRequest = null;
+let performanceChartState = null;
 
 startMarketBackground(backgroundCanvas);
 loadMarketOverview();
@@ -85,6 +87,9 @@ function returnHome() {
   activeRequest = null;
   activeMarketRequest?.abort();
   activeMarketRequest = null;
+  activePerformanceRequest?.abort();
+  activePerformanceRequest = null;
+  destroyPerformanceChart();
   setLoading(false);
   screen.classList.remove("has-results");
   resultsNode.hidden = true;
@@ -122,6 +127,19 @@ function renderResults(data) {
       ${metric("Debt / Equity", normalizeDebtEquity(metrics.debt_to_equity))}
     </section>
 
+    <section id="performance-chart" class="performance-chart" aria-label="Relative performance chart">
+      <div class="performance-head">
+        <div>
+          <span>Relative performance</span>
+          <h2>${escapeHtml(data.ticker)} vs. industry benchmarks</h2>
+        </div>
+        <div class="performance-periods" aria-label="Chart period">
+          ${["1M", "3M", "6M", "1Y"].map((period) => `<button type="button" data-period="${period}" class="${period === "1Y" ? "active" : ""}">${period}</button>`).join("")}
+        </div>
+      </div>
+      <div class="performance-loading">Loading performance history</div>
+    </section>
+
     <section class="rule-grid">
       ${rules.map(renderRule).join("")}
     </section>
@@ -141,6 +159,199 @@ function renderResults(data) {
   `;
   resultsNode.hidden = false;
   screen.classList.add("has-results");
+  loadPerformanceChart(data.ticker, metrics.sector || "", metrics.industry || "");
+}
+
+async function loadPerformanceChart(ticker, sector, industry) {
+  activePerformanceRequest?.abort();
+  destroyPerformanceChart();
+  const request = new AbortController();
+  activePerformanceRequest = request;
+  const query = new URLSearchParams({ ticker, sector, industry });
+  try {
+    const response = await fetch(`/api/performance?${query}`, { signal: request.signal });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || "Performance history unavailable");
+    if (activePerformanceRequest !== request) return;
+    renderPerformanceChart(payload);
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    const chart = document.querySelector("#performance-chart");
+    if (chart) chart.innerHTML = `<div class="performance-empty">Performance comparison temporarily unavailable.</div>`;
+  } finally {
+    if (activePerformanceRequest === request) activePerformanceRequest = null;
+  }
+}
+
+function renderPerformanceChart(payload) {
+  const chart = document.querySelector("#performance-chart");
+  if (!chart) return;
+  const series = payload.series || [];
+  if (!series.length) {
+    chart.innerHTML = `<div class="performance-empty">Performance history was unavailable for this company and its selected benchmarks.</div>`;
+    return;
+  }
+  chart.innerHTML = `
+    <div class="performance-head">
+      <div>
+        <span>Relative performance</span>
+        <h2>${escapeHtml(payload.ticker)} vs. industry benchmarks</h2>
+        <p>${escapeHtml(payload.rationale || "Benchmarks selected from company classification")}</p>
+      </div>
+      <div class="performance-periods" aria-label="Chart period">
+        ${["1M", "3M", "6M", "1Y"].map((period) => `<button type="button" data-period="${period}" class="${period === "1Y" ? "active" : ""}">${period}</button>`).join("")}
+      </div>
+    </div>
+    <div class="performance-legend">
+      ${series.map((item, index) => `<span><i style="--series-color:${chartColor(index)}"></i>${escapeHtml(item.name)}</span>`).join("")}
+    </div>
+    <div class="performance-canvas-wrap">
+      <canvas aria-label="Normalized stock and benchmark performance chart"></canvas>
+      <div class="performance-tooltip" hidden></div>
+    </div>
+  `;
+  const canvas = chart.querySelector("canvas");
+  const tooltip = chart.querySelector(".performance-tooltip");
+  performanceChartState = { chart, canvas, tooltip, series, period: "1Y", filtered: [] };
+  chart.querySelectorAll("[data-period]").forEach((button) => {
+    button.addEventListener("click", () => {
+      chart.querySelectorAll("[data-period]").forEach((item) => item.classList.toggle("active", item === button));
+      performanceChartState.period = button.dataset.period;
+      drawPerformanceChart();
+    });
+  });
+  canvas.addEventListener("pointermove", showPerformanceTooltip);
+  canvas.addEventListener("pointerleave", () => {
+    tooltip.hidden = true;
+    drawPerformanceChart();
+  });
+  performanceChartState.observer = new ResizeObserver(drawPerformanceChart);
+  performanceChartState.observer.observe(canvas.parentElement);
+  drawPerformanceChart();
+}
+
+function destroyPerformanceChart() {
+  performanceChartState?.observer?.disconnect();
+  performanceChartState = null;
+}
+
+function drawPerformanceChart(highlightIndex = null) {
+  const state = performanceChartState;
+  if (!state) return;
+  const { canvas, series, period } = state;
+  const width = canvas.parentElement.clientWidth;
+  const height = canvas.parentElement.clientHeight;
+  if (!width || !height) return;
+  const ratio = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = Math.floor(width * ratio);
+  canvas.height = Math.floor(height * ratio);
+  const context = canvas.getContext("2d");
+  context.setTransform(ratio, 0, 0, ratio, 0, 0);
+  context.clearRect(0, 0, width, height);
+
+  const filtered = filterPerformanceSeries(series, period);
+  state.filtered = filtered;
+  const allValues = filtered.flatMap((item) => item.points.map((point) => point.value));
+  if (!allValues.length) return;
+  let minValue = Math.min(...allValues, 0);
+  let maxValue = Math.max(...allValues, 0);
+  const spread = Math.max(maxValue - minValue, 10);
+  minValue -= spread * 0.12;
+  maxValue += spread * 0.12;
+  const padding = { top: 16, right: 18, bottom: 28, left: 48 };
+  const plotWidth = width - padding.left - padding.right;
+  const plotHeight = height - padding.top - padding.bottom;
+  const maxPoints = Math.max(...filtered.map((item) => item.points.length));
+  const xFor = (index) => padding.left + (index / Math.max(maxPoints - 1, 1)) * plotWidth;
+  const yFor = (value) => padding.top + ((maxValue - value) / (maxValue - minValue)) * plotHeight;
+
+  context.font = '10px "SF Pro Text", sans-serif';
+  context.lineWidth = 1;
+  for (let row = 0; row <= 4; row += 1) {
+    const value = maxValue - ((maxValue - minValue) / 4) * row;
+    const y = yFor(value);
+    context.beginPath();
+    context.moveTo(padding.left, y);
+    context.lineTo(width - padding.right, y);
+    context.strokeStyle = "rgba(255,255,255,0.08)";
+    context.stroke();
+    context.fillStyle = "#71717a";
+    context.textAlign = "right";
+    context.fillText(`${value >= 0 ? "+" : ""}${value.toFixed(0)}%`, padding.left - 8, y + 3);
+  }
+
+  filtered.forEach((item, seriesIndex) => {
+    context.beginPath();
+    item.points.forEach((point, index) => {
+      const x = xFor(index);
+      const y = yFor(point.value);
+      if (index === 0) context.moveTo(x, y);
+      else context.lineTo(x, y);
+    });
+    context.strokeStyle = chartColor(seriesIndex);
+    context.lineWidth = seriesIndex === 0 ? 2.4 : 1.6;
+    context.stroke();
+  });
+
+  const primaryPoints = filtered[0]?.points || [];
+  if (highlightIndex !== null && primaryPoints[highlightIndex]) {
+    const x = xFor(highlightIndex);
+    context.beginPath();
+    context.moveTo(x, padding.top);
+    context.lineTo(x, padding.top + plotHeight);
+    context.strokeStyle = "rgba(255,255,255,0.38)";
+    context.stroke();
+  }
+
+  const firstDate = primaryPoints[0]?.date;
+  const lastDate = primaryPoints[primaryPoints.length - 1]?.date;
+  context.fillStyle = "#71717a";
+  context.textAlign = "left";
+  if (firstDate) context.fillText(formatShortDate(firstDate), padding.left, height - 7);
+  context.textAlign = "right";
+  if (lastDate) context.fillText(formatShortDate(lastDate), width - padding.right, height - 7);
+}
+
+function filterPerformanceSeries(series, period) {
+  const days = { "1M": 31, "3M": 93, "6M": 186, "1Y": 370 }[period] || 370;
+  const latestDate = Math.max(...series.flatMap((item) => item.points.map((point) => new Date(`${point.date}T00:00:00`).getTime())));
+  const cutoff = latestDate - days * 86_400_000;
+  return series.map((item) => {
+    const points = item.points.filter((point) => new Date(`${point.date}T00:00:00`).getTime() >= cutoff);
+    if (!points.length) return { ...item, points: [] };
+    const baseline = points[0].value;
+    return { ...item, points: points.map((point) => ({ ...point, value: point.value - baseline })) };
+  });
+}
+
+function showPerformanceTooltip(event) {
+  const state = performanceChartState;
+  if (!state?.filtered.length) return;
+  const rect = state.canvas.getBoundingClientRect();
+  const primary = state.filtered[0].points;
+  const plotStart = 48;
+  const plotWidth = rect.width - 66;
+  const index = Math.max(0, Math.min(primary.length - 1, Math.round(((event.clientX - rect.left - plotStart) / plotWidth) * (primary.length - 1))));
+  const date = primary[index]?.date;
+  if (!date) return;
+  const rows = state.filtered.map((item, seriesIndex) => {
+    if (!item.points.length) return "";
+    const point = item.points.reduce((closest, candidate) => Math.abs(new Date(candidate.date) - new Date(date)) < Math.abs(new Date(closest.date) - new Date(date)) ? candidate : closest, item.points[0]);
+    return `<span><i style="--series-color:${chartColor(seriesIndex)}"></i>${escapeHtml(item.name)} <strong>${point.value >= 0 ? "+" : ""}${point.value.toFixed(1)}%</strong></span>`;
+  }).join("");
+  state.tooltip.innerHTML = `<time>${formatDate(date)}</time>${rows}`;
+  state.tooltip.hidden = false;
+  state.tooltip.style.left = `${Math.min(Math.max(event.clientX - rect.left + 12, 8), rect.width - 184)}px`;
+  state.tooltip.style.top = `${Math.max(event.clientY - rect.top - 34, 8)}px`;
+  drawPerformanceChart(index);
+}
+
+function chartColor(index) {
+  return ["#ffffff", "#38bdf8", "#f59e0b"][index] || "#a1a1aa";
+}
+
+function formatShortDate(value) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
 async function loadMarketOverview() {
